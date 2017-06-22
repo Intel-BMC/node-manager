@@ -18,6 +18,7 @@
 #define PECI_DIMM_TEMP_REG 0x150
 #define RDPCICFGLOCAL_PECI_CMD 0xe1
 #define DEV_PECI_CC_SUCCESS 0x40
+#define DIMM_DEFAULT_VALUE 0x55
 
 class DimmConfig {
  public:
@@ -154,6 +155,9 @@ int main(int argc, char** argv) {
   if (val[0] == 0)
     std::cout << "Dimm " << unsigned(dimmnum) << " CPU " << unsigned(cpunum)
               << " not populated.\n";
+  else if(val[0] == DIMM_DEFAULT_VALUE)
+    std::cout << "Dimm " << unsigned(dimmnum) << " CPU " << unsigned(cpunum)
+              << " in illegal state.\n";
   else
     std::cout << unsigned(val[0]) << " degrees C.\n";
 }

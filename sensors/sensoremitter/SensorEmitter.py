@@ -15,11 +15,17 @@ class SensorObject(dbus.service.Object):
         timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
         gobject.timeout_add(timeout, self.poll, sensor)
         self.value = None
+        self.poll_num = 0
 
     def poll(self, sensor):
         value = sensor.read()
-        if value != self.value:
+        # require 1 non 0 read first
+        if value == 0 and self.value == None:
+            return True
+        self.poll_num += 1
+        if value != self.value or self.poll_num > 10:
             self.value = value
+            self.poll_num = 0
             self.PropertiesChanged("xyz.openbmc_project.Sensor.Value", {"Value": self.value}, [])
         return True
 

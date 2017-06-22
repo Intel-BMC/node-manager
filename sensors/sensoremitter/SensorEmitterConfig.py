@@ -22,7 +22,7 @@ class DimmSensor:
             m = re.search('\d+', out)
             if m:
                 return int(m.group(0))
-
+        return 0
 
 class TachSensor:
 
@@ -37,7 +37,6 @@ class TachSensor:
     def read(self):
         with open(self.path) as f:
             val = f.read().strip()
-        val = None if val == 0 else val
         return int(val)
 
 
