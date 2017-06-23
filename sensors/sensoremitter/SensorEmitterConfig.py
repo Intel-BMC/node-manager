@@ -17,7 +17,10 @@ class DimmSensor:
         self.scale = 0
 
     def read(self):
-        out = subprocess.check_output('{} {} {}'.format(self.path, self.cpu, self.dimm), shell=True)
+        try:
+            out = subprocess.check_output('{} {} {}'.format(self.path, self.cpu, self.dimm), shell=True)
+        except subprocess.CalledProcessError:
+            return 0
         if out[0].isdigit():
             m = re.search('\d+', out)
             if m:
@@ -113,7 +116,7 @@ class WolfPass:
             self.ADCSensors.append(ADCSensor(ii, ADC_name))
             ii += 1
 
-        self.sensors = self.DimmSensors + self.TachSensors + self.TempSensors + self.ADCSensors
+        self.sensors = [self.DimmSensors] + self.TachSensors + self.TempSensors + self.ADCSensors
 
     def get_sensors(self):
         return self.sensors

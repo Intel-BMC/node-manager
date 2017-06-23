@@ -4,6 +4,7 @@ import gobject
 import dbus
 import dbus.service
 import dbus.mainloop.glib
+import thread
 
 from SensorEmitterConfig import WolfPass
 
@@ -55,16 +56,20 @@ class SensorObject(dbus.service.Object):
     def exit(self):
         loop.quit()
 
-if __name__ == '__main__':
-
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-
+def sensor_thread(sensor):
     system_bus = dbus.SystemBus()
-    name = dbus.service.BusName('xyz.openbmc_project.sensors', system_bus)
-    config = WolfPass()
-    objects = []
-    for sensor in config.get_sensors():
-        objects.append(SensorObject(system_bus, sensor))
+    if isinstance(sensor, list):
+        obj = []
+        for sens in sensor:
+            obj.append(SensorObject(system_bus, sens))
+    else:
+        obj = SensorObject(system_bus, sensor)
 
+if __name__ == '__main__':
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    gobject.threads_init()
+    config = WolfPass()
+    for sensor in config.get_sensors():
+        thread.start_new_thread(sensor_thread, (sensor,))
     loop = gobject.MainLoop()
     loop.run()
