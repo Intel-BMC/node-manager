@@ -4,25 +4,28 @@ import gobject
 import dbus
 import dbus.service
 import dbus.mainloop.glib
-import thread
+import threading
+import time
+import random
 
 from SensorEmitterConfig import WolfPass
 
+FAIL_TIMEOUT = 5
 
 class SensorObject(dbus.service.Object):
 
     def __init__(self, conn, sensor):
         dbus.service.Object.__init__(self, conn, '/xyz/openbmc_project/sensors/{}/{}'.format(sensor.type, sensor.name))
-        timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
-        gobject.timeout_add(timeout, self.poll, sensor)
+        self.timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
         self.value = None
+        self.sensor = sensor
         self.poll_num = 0
 
-    def poll(self, sensor):
-        value = sensor.read()
+    def poll(self):
+        value = self.sensor.read()
         # require 1 non 0 read first
         if value == 0 and self.value == None:
-            return True
+            return False
         self.poll_num += 1
         if value != self.value or self.poll_num > 10:
             self.value = value
@@ -58,18 +61,30 @@ class SensorObject(dbus.service.Object):
 
 def sensor_thread(sensor):
     system_bus = dbus.SystemBus()
+    time.sleep(random.uniform(0, 1)) # to stagger sensors
     if isinstance(sensor, list):
-        obj = []
+        objs = []
         for sens in sensor:
-            obj.append(SensorObject(system_bus, sens))
+            objs.append(SensorObject(system_bus, sens))
+        while True:
+            for obj in objs:
+                obj.poll()
+            time.sleep(obj.timeout * (10 ** -3))
+
     else:
         obj = SensorObject(system_bus, sensor)
+        while True:
+            if not obj.poll():
+                time.sleep(FAIL_TIMEOUT)
+            else:
+                time.sleep(obj.timeout * (10 ** -3))
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     gobject.threads_init()
     config = WolfPass()
     for sensor in config.get_sensors():
-        thread.start_new_thread(sensor_thread, (sensor,))
+        thread = threading.Thread(target=sensor_thread, args=(sensor,))
+        thread.start()
     loop = gobject.MainLoop()
     loop.run()

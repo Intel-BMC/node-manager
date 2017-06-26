@@ -33,9 +33,10 @@ class TachSensor:
         self.hwmon = find_hwmon('1e786000.pwm-tacho-controller')
         self.path = os.path.join(self.hwmon, 'fan{}_input'.format(tach))
         self.type = 'tach'
-        self.name = 'tach{}'.format(tach)
+        self.name = 'tach{:02}'.format(tach)
         self.units = '' # rpm
         self.scale = 0
+        self.timeout = 2000
 
     def read(self):
         with open(self.path) as f:
