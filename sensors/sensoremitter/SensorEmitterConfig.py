@@ -39,8 +39,11 @@ class TachSensor:
         self.timeout = 2000
 
     def read(self):
-        with open(self.path) as f:
-            val = f.read().strip()
+        try:
+            with open(self.path) as f:
+                val = f.read().strip()
+        except IOError:
+            val = 0
         return int(val)
 
 
@@ -96,7 +99,7 @@ class WolfPass:
     def __init__(self):
         self.DimmSensors = [DimmSensor(0, dimm) for dimm in range(0, 12)] + \
                            [DimmSensor(1, dimm) for dimm in range(0, 12)]
-        self.TachSensors = [TachSensor(tach) for tach in range(0, 12)]
+        self.TachSensors = [TachSensor(tach) for tach in range(1, 13)]
         self.TempSensors = [BaseboardTempSensor('1-004d', 1, 'front_panel'),
                             #BaseboardTempSensor('2-0048', 1, 'riser1'),
                             #BaseboardTempSensor('2-0049', 2, 'riser2'),
