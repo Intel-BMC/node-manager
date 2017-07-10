@@ -1,0 +1,21 @@
+{
+    "name": "LSI SAS Module",
+    "probe": "Fru Board ID Starts With \"INSERT LSI BOARD ID HERE\"",
+
+    "exposes": [{
+            "name": "LSI SAS Module Temperature",
+            "type": "LM75",
+            "address": "0x98",
+            //Implicit
+            "bus": "{component bus number}"
+        },
+        {
+            "name": "LSI SAS Module FRU",
+            "type": "IntelFruDevice",
+
+            //Implicit
+            //"address": "{component address}",
+            "bus": "{component bus number}"
+        }
+    ]
+}
