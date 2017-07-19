@@ -15,11 +15,13 @@ FAIL_TIMEOUT = 5
 class SensorObject(dbus.service.Object):
 
     def __init__(self, conn, sensor):
-        dbus.service.Object.__init__(self, conn, '/xyz/openbmc_project/sensors/{}/{}'.format(sensor.type, sensor.name))
+        self.object_name = '/xyz/openbmc_project/sensors/{}/{}'.format(sensor.type, sensor.name)
+        dbus.service.Object.__init__(self, conn, self.object_name)
         self.timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
         self.value = None
         self.sensor = sensor
         self.poll_num = 0
+        self.InterfacesAdded(self.object_name, {"xyz.openbmc_project.sensors": {"Value": ""}})
 
     def poll(self):
         value = self.sensor.read()
@@ -30,6 +32,7 @@ class SensorObject(dbus.service.Object):
         if value != self.value or self.poll_num > 10:
             self.value = value
             self.poll_num = 0
+
             self.PropertiesChanged("xyz.openbmc_project.Sensor.Value", {"Value": self.value}, [])
         return True
 
@@ -49,10 +52,18 @@ class SensorObject(dbus.service.Object):
 
     @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='s', out_signature='a{sv}')
     def GetAll(self, name):
-        if name == 'Value':
-            val = self.value
-        if val:
-            return {name: val}
+        ret_dict = {}
+        if self.value:
+            ret_dict["Value"] = self.value
+        return ret_dict
+
+    @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='s', out_signature='a{sv}')
+    def GetManagedObjects(self, name):
+        return [{self.object_name, {"xyz.openbmc_project.sensors": {"Value": ""}}}]
+
+    @dbus.service.signal('org.freedesktop.DBus.ObjectManager', signature='oa{sa{sv}}')
+    def InterfacesAdded(self, object_name, interfaces):
+        pass
 
     @dbus.service.method('xyz.openbmc_project.sensors',
                          in_signature='', out_signature='')
