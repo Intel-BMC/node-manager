@@ -57,7 +57,7 @@ class SensorObject(dbus.service.Object):
             ret_dict["Value"] = self.value
         return ret_dict
 
-    @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='s', out_signature='a{sv}')
+    @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='', out_signature='a{sv}')
     def GetManagedObjects(self):
         return [{self.object_name, {"xyz.openbmc_project.sensors": {"Value": ""}}}]
 
