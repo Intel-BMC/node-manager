@@ -1,12 +1,10 @@
 import os 
 import subprocess
-import json 
-
+import json
+import overlay_gen
+'''
 unknown_i2c_devices = []
 fru_devices = []
-
-
-class FRU
 
 
 def run_command(command):
@@ -106,3 +104,20 @@ unknown_i2c_devices = filter(lambda x: x not in items_to_remove, unknown_i2c_dev
 
 for element in unknown_i2c_devices:
     print("unknown bus:{} device:{:02X}".format(element[0], element[1]))
+    
+'''
+with open(os.path.join(os.path.dirname(__file__), "WFT Baseboard.json")) as json_file:
+    entity = json.load(json_file)
+
+overlay_gen.unload_overlays()  # start fresh
+
+for element in entity.get('exposes', []):
+
+    if element.get("type", "") == "TMP75":
+        element["reg"] = element.get("address").lower()
+        # todo(ed) find a better escape function to use.
+        element["oem_name"] = element.get("name").replace(" ", "_").lower()
+        overlay_gen.generate_template(**element)
+
+overlay_gen.create_dtbo()
+overlay_gen.load_overlay()

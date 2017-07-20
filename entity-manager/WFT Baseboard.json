@@ -1,36 +1,35 @@
 {
     "name": "WFP Baseboard",
     "probe": "Fru Board ID Starts With WFT",
-    //"probe": "Platform ID is 0x9C",
     "exposes": [{
             "name": "Left Rear Temp",
-            "type": "LM75",
-            "address": "0x92",
-            "bus": 7
+            "type": "TMP75",
+            "address": "0x49",
+            "bus": 6
         },
         {
             "name": "Right Rear Temp",
-            "type": "LM75",
-            "address": "0x9A",
-            "bus": 7
+            "type": "TMP75",
+            "address": "0x4D",
+            "bus": 6
         },
         {
             "name": "Voltage Regulator 1 Temp",
-            "type": "LM75",
-            "address": "0x90",
-            "bus": 7
+            "type": "TMP75",
+            "address": "0x48",
+            "bus": 6
         },
         {
             "name": "Voltage Regulator 2 Temp",
-            "type": "LM75",
-            "address": "0x96",
-            "bus": 7
+            "type": "TMP75",
+            "address": "0x4B",
+            "bus": 6
         },
         {
             "name": "BMC Temp",
-            "type": "LM75",
-            "address": "0x94",
-            "bus": 7
+            "type": "TMP75",
+            "address": "0x4A",
+            "bus": 6
         },
         {
             "name": "1U System Fan connector 1",

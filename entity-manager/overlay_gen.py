@@ -10,19 +10,19 @@ PLATFORM = 'aspeed,ast2500'
 OUTPUT_DIR = 'out'
 DTOVERLAY = os.path.join('/usr', 'bin', 'dtoverlay')
 
-
 class TMP75:
     def __init__(self, **kwargs):
         self.name = 'tmp75'
         self.template_args = {'platform': PLATFORM,
                               'bus': kwargs.get('bus'),
-                              'reg': kwargs.get('reg')}
+                              'reg': kwargs.get('reg'),
+                              'name': kwargs.get('oem_name')}
 
     def create_dts(self):
         with open(os.path.join(TEMPLATE_DIR, 'tmp75.template')) as template_file:
             output = Template(template_file.read()).substitute(self.template_args)
 
-        outfile = 'tmp75@{}_{}.dts'.format(self.template_args['bus'], self.template_args['reg'])
+        outfile = 'tmp75@{}.dts'.format(self.template_args['name'])
         with open(os.path.join(OUTPUT_DIR, outfile), 'w') as file_handle:
             file_handle.write(output)
 
