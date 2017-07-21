@@ -7,9 +7,9 @@
         __overlay__{
             #address-cells = <1>;
             #size-cells = <0>;
-            #status = "okay";
+            status = "okay";
             tmp75@$name {
-                compatible = "ti, tmp75";
+                compatible = "ti,tmp75";
                 reg = <$reg>;
             };
         };
