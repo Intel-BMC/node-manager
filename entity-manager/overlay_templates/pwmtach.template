@@ -3,16 +3,15 @@
 / {
     compatible = "$platform";
     fragment@0{
-        target = <&i2c$bus>;
+        target = <&pwmtacho>;
         __overlay__{
             #address-cells = <1>;
             #size-cells = <0>;
             status = "okay";
-            tmp75@$name {
-                compatible = "ti,tmp75";
+            oemname$index = "$name";
+            fan@$index {
                 reg = <$reg>;
-                oemname1 = "$name";
-                scale = "-3";
+                aspeed,fan-tach-ch = /bits/ 8 <$tachs>;
             };
         };
 

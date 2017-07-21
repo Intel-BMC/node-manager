@@ -8,11 +8,11 @@
             #address-cells = <1>;
             #size-cells = <0>;
             status = "okay";
-            tmp75@$name {
-                compatible = "ti,tmp75";
+            eeprom@$name {
+                compatible = "atmel,24c256";
                 reg = <$reg>;
                 oemname1 = "$name";
-                scale = "-3";
+                pagesize = <64>;
             };
         };
 

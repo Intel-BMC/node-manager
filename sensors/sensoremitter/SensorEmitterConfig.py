@@ -2,8 +2,10 @@ import subprocess
 import re
 import os
 import random
+import glob
 
 HWMON_PATH = '/sys/class/hwmon'
+
 
 class DimmSensor:
 
@@ -27,14 +29,31 @@ class DimmSensor:
                 return int(m.group(0))
         return 0
 
+
 class TachSensor:
 
-    def __init__(self, tach):
-        self.hwmon = find_hwmon('1e786000.pwm-tacho-controller')
-        self.path = os.path.join(self.hwmon, 'fan{}_input'.format(tach))
+    def __init__(self, sensor):
+        self.hwmon = os.path.dirname(sensor)
+        self.path = sensor
         self.type = 'tach'
-        self.name = 'tach{:02}'.format(tach)
-        self.units = '' # rpm
+        name_count = len(glob.glob(os.path.join(self.hwmon, 'of_node', 'oemname*')))
+        max_temps = len(glob.glob(os.path.join(self.hwmon, 'fan*input')))
+        two_to_one = name_count < max_temps
+
+        index_m = re.search('fan(\d+)_input', os.path.basename(sensor))
+        index = int(index_m.group(1))
+        b_sensor = False
+        if two_to_one:
+            b_sensor = index % 2 == 0
+            index = int((index + 1) / 2)  # todo, will we ever have more than 2:1 ?
+
+        self.name = get_oemname_from_sys(self.hwmon, index)
+        if self.name is None:
+            self.name = os.path.basename(sensor)
+        if b_sensor:
+            self.name += 'b'
+
+        self.units = ''  # rpm
         self.scale = 0
         self.timeout = 2000
 
@@ -47,31 +66,42 @@ class TachSensor:
         return int(val)
 
 
-class BaseboardTempSensor:
+class HwmonTempSensor:
 
-    def __init__(self, dev, input, name, scale=-3):
-        self.hwmon = find_hwmon(dev)
-        self.path = os.path.join(self.hwmon, 'temp{}_input'.format(input))
+    def __init__(self, sensor):
+        self.hwmon = os.path.dirname(sensor)
+        self.path = sensor
         self.type = 'temperature'
-        self.scale = scale
         self.units = 'C'
-        self.name = name
+        index_m = re.search('temp(\d+)_input', os.path.basename(sensor))
+        index = index_m.group(1)
+        self.name = get_oemname_from_sys(self.hwmon, index)
+        if self.name is None:
+            self.name = os.path.basename(sensor)
+        self.scale = get_scale_from_sys(self.hwmon)
 
     def read(self):
-        with open(self.path) as f:
-            val = f.read().strip()
+        try:
+            with open(self.path) as f:
+                val = f.read().strip()
+        except IOError:
+            val = 0
 
         return int(val) * (10 ** self.scale)
 
 
 class ADCSensor:
 
-    def __init__(self, input, name, scale=-3):
-        self.hwmon = find_hwmon('iio-hwmon')
-        self.path = os.path.join(self.hwmon, 'in{}_input'.format(input))
+    def __init__(self, sensor):
+        self.hwmon = os.path.dirname(sensor)
+        self.path = sensor
         self.type = 'voltage'
-        self.scale = scale
-        self.name = name
+        self.scale = get_scale_from_sys(self.hwmon)
+        index_m = re.search('in(\d+)_input', os.path.basename(sensor))
+        index = index_m.group(1)
+        self.name = get_oemname_from_sys(self.hwmon, index)
+        if self.name is None:
+            self.name = os.path.basename(sensor)
         self.units = 'V'
 
     def read(self):
@@ -99,26 +129,9 @@ class WolfPass:
     def __init__(self):
         self.DimmSensors = [DimmSensor(0, dimm) for dimm in range(0, 12)] + \
                            [DimmSensor(1, dimm) for dimm in range(0, 12)]
-        self.TachSensors = [TachSensor(tach) for tach in range(1, 13)]
-        self.TempSensors = [BaseboardTempSensor('1-004d', 1, 'front_panel'),
-                            #BaseboardTempSensor('2-0048', 1, 'riser1'),
-                            #BaseboardTempSensor('2-0049', 2, 'riser2'),
-                            BaseboardTempSensor('6-0048', 1, 'vrd1'),
-                            BaseboardTempSensor('6-0049', 1, 'lr_brd'),
-                            BaseboardTempSensor('6-004a', 1, 'bmc_temp'),
-                            BaseboardTempSensor('6-004b', 1, 'vrd2'),
-                            BaseboardTempSensor('6-004d', 1, 'rr_brd'),
-                            #BaseboardTempSensor('13-0056', 1, 'riser3')
-                            ]
-        ADC_names = ['BB12V', 'P3V3', 'PVNN_PCH_AUX', 'P105_PCH_AUX', 'P12V_AUX', 'P1V8_PCH',
-                     'P3VBAT', 'PVCCIN_CPU0', 'PVCCIN_CPU1', 'PVDQ_ABC_CPU0', 'PVDQ_DEF_CPU0',
-                     'PVDQ_ABC_CPU1', 'PVDQ_DEF_CPU1', 'PVCCIO_CPU0', 'PVCCIO_CPU1'
-        ]
-        self.ADCSensors = []
-        ii = 1
-        for ADC_name in ADC_names:
-            self.ADCSensors.append(ADCSensor(ii, ADC_name))
-            ii += 1
+        self.TachSensors = [TachSensor(tach) for tach in glob.glob(os.path.join(HWMON_PATH, 'hwmon*', 'fan*input'))]
+        self.TempSensors = [HwmonTempSensor(temp) for temp in glob.glob(os.path.join(HWMON_PATH, 'hwmon*', 'temp*input'))]
+        self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
 
         self.sensors = [self.DimmSensors] + self.TachSensors + self.TempSensors + self.ADCSensors
 
@@ -143,3 +156,24 @@ def find_hwmon(name):
         device_name = os.path.basename(os.path.realpath(device))
         if device_name == name:
             return subdir
+
+
+def get_oemname_from_sys(hwmon_path, index=1):
+    oemname = 'oemname{}'.format(index)
+    try:
+        with open(os.path.join(hwmon_path, 'of_node', oemname)) as namefile:
+            name = namefile.read().rstrip('\0')
+    except IOError:
+        name = None
+    return name
+
+
+def get_scale_from_sys(hwmon_path, default=-3):
+    try:
+        with open(os.path.join(hwmon_path, 'of_node', 'scale')) as scalefile:
+            scale = scalefile.read().rstrip('\0')
+            scale = int(scale)
+    except (IOError, ValueError):
+        return default
+
+    return scale

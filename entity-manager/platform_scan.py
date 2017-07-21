@@ -1,7 +1,11 @@
-import os 
+#!/usr/bin/python
+
+import os
 import subprocess
 import json
 import overlay_gen
+
+CONFIGURATION_DIR = '/usr/share/configurations'
 '''
 unknown_i2c_devices = []
 fru_devices = []
@@ -10,16 +14,16 @@ fru_devices = []
 def run_command(command):
     print command
     return subprocess.check_output(command, shell=True)
-    
+
 for bus_index in range(1,8):
     try:
         result = run_command("i2cdetect -y -r {}".format(bus_index))
-        print result 
+        print result
         device_index = 0
         for line in result.split("\n")[1:]:
             line = line[4:]
             for device in [line[i:i+3] for i in range(0, len(line), 3)]:
-                
+
                 if device == "-- ":
                     pass
                 elif device == "   ":
@@ -45,7 +49,7 @@ for element in unknown_i2c_devices:
         out = {}
         if csum == result_bytes[7]:
             print "found valid fru bus: {} device {:02X}".format(i2c_bus_index,i2c_device_index)
-            for index, area in enumerate(("INTERNAL", "CHASSIS", "BOARD", "PRODUCT", "MULTIRECORD")):                   
+            for index, area in enumerate(("INTERNAL", "CHASSIS", "BOARD", "PRODUCT", "MULTIRECORD")):
                 area_offset = result_bytes[index + 1]
                 if area_offset != 0:
                     area_offset = area_offset * 8
@@ -65,28 +69,28 @@ for element in unknown_i2c_devices:
                             length -= to_get
 
                         offset = 2
-                        if area == "CHASSIS":                                                                               
-                            field_names = ("PART_NUMBER", "SERIAL_NUMBER", "CHASSIS_INFO_AM1", "CHASSIS_INFO_AM2")          
-                            out["CHASSIS_TYPE"] = area_bytes[offset]                                                         
-                            offset += 1                                                                                     
-                        elif area == "BOARD":                                                                               
-                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "SERIAL_NUMBER", "PART_NUMBER", "VERSION_ID")    
-                            out["BOARD_LANGUAGE_CODE"] = area_bytes[offset]                                                  
-                            offset += 1                                                                                     
-                            out["BOARD_MANUFACTURE_DATE"] = area_bytes[offset:offset+4]                                      
-                            offset += 3                                                                                     
-                        elif area == "PRODUCT":                                                                             
-                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "PART_NUMBER", "PRODUCT_VERSION",                
-                                        "PRODUCT_SERIAL_NUMBER", "ASSET_TAG")                                            
-                            out["PRODUCT_LANGUAGE_CODE"] = area_bytes[offset]                                                
-                            offset += 1                                                                                     
-                        else:                                                                                               
-                            field_names = ()                                                                                
-                                                                                                                            
-                        for field in field_names:                                                                           
-                            length = area_bytes[offset] & 0x3f                                                               
+                        if area == "CHASSIS":
+                            field_names = ("PART_NUMBER", "SERIAL_NUMBER", "CHASSIS_INFO_AM1", "CHASSIS_INFO_AM2")
+                            out["CHASSIS_TYPE"] = area_bytes[offset]
+                            offset += 1
+                        elif area == "BOARD":
+                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "SERIAL_NUMBER", "PART_NUMBER", "VERSION_ID")
+                            out["BOARD_LANGUAGE_CODE"] = area_bytes[offset]
+                            offset += 1
+                            out["BOARD_MANUFACTURE_DATE"] = area_bytes[offset:offset+4]
+                            offset += 3
+                        elif area == "PRODUCT":
+                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "PART_NUMBER", "PRODUCT_VERSION",
+                                        "PRODUCT_SERIAL_NUMBER", "ASSET_TAG")
+                            out["PRODUCT_LANGUAGE_CODE"] = area_bytes[offset]
+                            offset += 1
+                        else:
+                            field_names = ()
+
+                        for field in field_names:
+                            length = area_bytes[offset] & 0x3f
                             out[area + "_" + field] = ''.join(chr(x) for x in area_bytes[offset+1:offset+1+length]).rstrip()
-                            offset += length + 1 
+                            offset += length + 1
                             if offset >= len(area_bytes):
                                 print "Not long enough"
                                 break
@@ -104,9 +108,9 @@ unknown_i2c_devices = filter(lambda x: x not in items_to_remove, unknown_i2c_dev
 
 for element in unknown_i2c_devices:
     print("unknown bus:{} device:{:02X}".format(element[0], element[1]))
-    
+
 '''
-with open(os.path.join(os.path.dirname(__file__), "WFT Baseboard.json")) as json_file:
+with open(os.path.join(CONFIGURATION_DIR, "WFT Baseboard.json")) as json_file:
     entity = json.load(json_file)
 
 overlay_gen.unload_overlays()  # start fresh
@@ -117,7 +121,21 @@ for element in entity.get('exposes', []):
         element["reg"] = element.get("address").lower()
         # todo(ed) find a better escape function to use.
         element["oem_name"] = element.get("name").replace(" ", "_").lower()
-        overlay_gen.generate_template(**element)
+        overlay_gen.load_entity(**element)
 
-overlay_gen.create_dtbo()
-overlay_gen.load_overlay()
+    elif element.get("type", "") == "TMP421":
+        element["reg"] = element.get("address").lower()
+        element["oem_name"] = element.get("name").replace(" ", "_").lower()
+        element["oem_name1"] = element.get("name1").replace(" ", "_").lower()
+        overlay_gen.load_entity(**element)
+
+    elif element.get("type", "") == "ADC":
+        element["oem_name"] = element.get("name").replace(" ", "_").lower()
+        overlay_gen.load_entity(**element)
+
+    elif element.get("type", "") == "IntelFanConnector":
+        if "1U System Fan" in element.get("name", ""):  # todo find correct fan type
+            element["type"] = 'aspeed_pwmtacho'
+            element["oem_name"] = element.get("name").replace(" ", "_").lower()
+            overlay_gen.load_entity(**element)
+
