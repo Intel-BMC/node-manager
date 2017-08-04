@@ -1,7 +1,7 @@
 {
     "name": "R2000 Chassis (LACC Enabled)",
-    "probe": "\"Intel Front Panel\" PRESENT AND 2U_HSBP PRESENT AND LACC in ",
-
+   // "probe": "\"Intel Front Panel\" PRESENT AND 2U_HSBP PRESENT AND LACC in ",
+    "probe": "False",
     "exposes": [{
             "name": "Fan 1",
             "type": "IntelFan",

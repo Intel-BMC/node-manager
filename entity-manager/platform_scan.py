@@ -1,141 +1,154 @@
 #!/usr/bin/python
 
 import os
-import subprocess
+from fru_device import FruDeviceProbe
 import json
 import overlay_gen
+import glob
+import traceback
+from utils.generic import prep_json, dict_template_replace
+import warnings
 
-CONFIGURATION_DIR = '/usr/share/configurations'
-'''
-unknown_i2c_devices = []
-fru_devices = []
-
-
-def run_command(command):
-    print command
-    return subprocess.check_output(command, shell=True)
-
-for bus_index in range(1,8):
-    try:
-        result = run_command("i2cdetect -y -r {}".format(bus_index))
-        print result
-        device_index = 0
-        for line in result.split("\n")[1:]:
-            line = line[4:]
-            for device in [line[i:i+3] for i in range(0, len(line), 3)]:
-
-                if device == "-- ":
-                    pass
-                elif device == "   ":
-                    pass
-                else:
-                    print("found {:02X}".format(device_index))
-                    unknown_i2c_devices.append((bus_index, device_index))
-                device_index += 1
-    except subprocess.CalledProcessError:
-        pass  #TODO(ed) only call valid busses
-
-items_to_remove = []
-for element in unknown_i2c_devices:
-    i2c_bus_index = element[0]
-    i2c_device_index = element[1]
-    try:
-        print "querying bus: {} device {:02X}".format(i2c_bus_index,i2c_device_index)
-        result = run_command("i2cget -f -y {} 0x{:02X} 0x00 i 0x8".format(i2c_bus_index, i2c_device_index))
-        print "got {}".format(result)
-        result_bytes = [int(x[2:], 16) for x in result.split(" ")[1:]]
-        csum = 256 - sum(result_bytes[0:7]) & 0xFF
-        print "result_bytes {}".format(result_bytes)
-        out = {}
-        if csum == result_bytes[7]:
-            print "found valid fru bus: {} device {:02X}".format(i2c_bus_index,i2c_device_index)
-            for index, area in enumerate(("INTERNAL", "CHASSIS", "BOARD", "PRODUCT", "MULTIRECORD")):
-                area_offset = result_bytes[index + 1]
-                if area_offset != 0:
-                    area_offset = area_offset * 8
-                    print "offset 0x{:02X}".format(area_offset)
-                    result = run_command("i2cget -f -y {} 0x{:02X} 0x{:02X} i 0x2".format(i2c_bus_index, i2c_device_index, area_offset))
-                    print "got {}".format(result)
-                    area_bytes = [int(x[2:], 16) for x in result.split(" ")[1:]]
-                    format = area_bytes[0]
-                    length = area_bytes[1] * 8
-                    if length != 0 :
-                        area_bytes = []
-                        while (length > 0):
-                            to_get = min(0x20, length)
-                            result = run_command("i2cget -f -y {} 0x{:02X} 0x{:02X} i 0x{:02X}".format(i2c_bus_index, i2c_device_index, area_offset, to_get))
-                            area_offset += to_get
-                            area_bytes.extend([int(x[2:], 16) for x in result.split(" ")[1:]])
-                            length -= to_get
-
-                        offset = 2
-                        if area == "CHASSIS":
-                            field_names = ("PART_NUMBER", "SERIAL_NUMBER", "CHASSIS_INFO_AM1", "CHASSIS_INFO_AM2")
-                            out["CHASSIS_TYPE"] = area_bytes[offset]
-                            offset += 1
-                        elif area == "BOARD":
-                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "SERIAL_NUMBER", "PART_NUMBER", "VERSION_ID")
-                            out["BOARD_LANGUAGE_CODE"] = area_bytes[offset]
-                            offset += 1
-                            out["BOARD_MANUFACTURE_DATE"] = area_bytes[offset:offset+4]
-                            offset += 3
-                        elif area == "PRODUCT":
-                            field_names = ("MANUFACTURER", "PRODUCT_NAME", "PART_NUMBER", "PRODUCT_VERSION",
-                                        "PRODUCT_SERIAL_NUMBER", "ASSET_TAG")
-                            out["PRODUCT_LANGUAGE_CODE"] = area_bytes[offset]
-                            offset += 1
-                        else:
-                            field_names = ()
-
-                        for field in field_names:
-                            length = area_bytes[offset] & 0x3f
-                            out[area + "_" + field] = ''.join(chr(x) for x in area_bytes[offset+1:offset+1+length]).rstrip()
-                            offset += length + 1
-                            if offset >= len(area_bytes):
-                                print "Not long enough"
-                                break
-
-            print json.dumps(out, sort_keys=True, indent=4)
-            fru_devices.append((i2c_bus_index, i2c_device_index, out))
-            items_to_remove.append(element)
-        print ""
-
-    except subprocess.CalledProcessError:
-        pass  #TODO(ed) only call valid busses
+TEMPLATE_CHAR = '$'
+CONFIGURATION_STORE = os.environ.get('JSON_STORE', '/var/configuration/system.json')
 
 
-unknown_i2c_devices = filter(lambda x: x not in items_to_remove, unknown_i2c_devices)
+class PlatformScan(object):
+    def __init__(self):
+        self.fru = None
+        self.found_devices = []
+        self.configuration_dir = os.environ.get('CONFIGURATION_DIR', '/usr/share/configurations')
 
-for element in unknown_i2c_devices:
-    print("unknown bus:{} device:{:02X}".format(element[0], element[1]))
+    def parse_fru(self):
+        self.fru = FruDeviceProbe()
 
-'''
-with open(os.path.join(CONFIGURATION_DIR, "WFT Baseboard.json")) as json_file:
-    entity = json.load(json_file)
+    @staticmethod
+    def is_overlay(d):
+        return 'connector' in list(d)
 
-overlay_gen.unload_overlays()  # start fresh
+    def apply_overlay(self, d, name):
+        if 'connector' not in list(d):
+            return False
+        for _, entity in self.found_devices.iteritems():
+            for key, child in entity['exposes'].iteritems():
+                if key == d['connector']:
+                    for k, val in d.iteritems():
+                        child[k] = val
+                    child['name'] = name
+                    child['status'] = 'okay'  # todo, should this go here?
+                    return True
+        return False
 
-for element in entity.get('exposes', []):
+    def read_config(self):
+        try:
+            with open(CONFIGURATION_STORE) as config:
+                self.found_devices = json.load(config)
+        except IOError:
+            return False
+        return self.found_devices
 
-    if element.get("type", "") == "TMP75":
-        element["reg"] = element.get("address").lower()
-        # todo(ed) find a better escape function to use.
-        element["oem_name"] = element.get("name").replace(" ", "_").lower()
-        overlay_gen.load_entity(**element)
+    def write_config(self):
+        try:
+            if not os.path.exists(os.path.dirname(CONFIGURATION_STORE)):
+                os.makedirs(os.path.dirname(CONFIGURATION_STORE))
+            with open(CONFIGURATION_STORE, 'w') as config:
+                json_config = json.dumps(self.found_devices, indent=4)
+                config.write(json_config)
+        except IOError:
+            warnings.warn('Failed to write configuration.')
 
-    elif element.get("type", "") == "TMP421":
-        element["reg"] = element.get("address").lower()
-        element["oem_name"] = element.get("name").replace(" ", "_").lower()
-        element["oem_name1"] = element.get("name1").replace(" ", "_").lower()
-        overlay_gen.load_entity(**element)
+    def parse_configuration(self):
 
-    elif element.get("type", "") == "ADC":
-        element["oem_name"] = element.get("name").replace(" ", "_").lower()
-        overlay_gen.load_entity(**element)
+        available_entity_list = []
+        self.found_devices = {}
 
-    elif element.get("type", "") == "IntelFanConnector":
-        if "1U System Fan" in element.get("name", ""):  # todo find correct fan type
-            element["type"] = 'aspeed_pwmtacho'
-            element["oem_name"] = element.get("name").replace(" ", "_").lower()
-            overlay_gen.load_entity(**element)
+        for json_filename in glob.glob(os.path.join(self.configuration_dir, "*.json")):
+            with open(os.path.join(self.configuration_dir, json_filename)) as json_file:
+                clean_file = prep_json(json_file)
+                try:
+                    available_entity_list.append(json.load(clean_file))
+                except ValueError as e:
+                    traceback.format_exc(e)
+                    print("Failed to parse {} error was {}".format(json_file, e))
+        while True:
+            num_devices = len(self.found_devices)
+            for entity in available_entity_list[:]:
+                probe_command = entity.get("probe", None)
+                if not probe_command:
+                    available_entity_list.remove(entity)
+                    print "entity {} doesn't have a probe function".format(entity.get("name", "unknown"))
+                    if not entity.get("name", False):
+                        print json.dumps(entity, sort_keys=True, indent=4)
+                elif entity['name'] not in (key for key in list(self.found_devices)):
+                    found_dev = eval(probe_command, {'fru': self.fru, 'found_devices': list(self.found_devices)})
+                    # TODO(ed)  Calling eval on a string is bad practice.  Come up with a better
+                    # probing structure
+                    if found_dev:
+                        try:
+                            count = len(found_dev)
+                        except TypeError:
+                            count = 1
 
+                        entity['type'] = 'entity'
+                        entity['status'] = 'okay'
+                        removals = set()
+                        for key, item in entity.get('exposes', []).iteritems():
+                            if self.is_overlay(item):
+                                assert (self.apply_overlay(item, key))
+                                removals.add(key)
+                            else:
+                                if TEMPLATE_CHAR in str(item):
+                                    # todo populate this dict smarter
+                                    for ii in range(0, count):
+                                        replaced = dict_template_replace(item, {'bus': found_dev[0]['bus'],
+                                                                                'fruaddress': hex(found_dev[0]['device']),
+                                                                                'index': ii})
+                                        if 'status' not in replaced:
+                                            replaced['status'] = 'okay'
+                                        entity['exposes'][key] = replaced
+                                else:
+                                    replaced = item
+                                    if 'status' not in replaced:
+                                        replaced['status'] = 'okay'
+                                    entity['exposes'][key] = replaced
+                        self.found_devices[entity['name']] = entity
+                        for r in removals:
+                            entity['exposes'].pop(r)
+
+            if len(self.found_devices) == num_devices:
+                break  # exit after looping without additions
+        self.write_config()
+        return self.found_devices
+
+
+if __name__ == '__main__':
+    platform_scan = PlatformScan()
+    found_devices = platform_scan.read_config()
+    if not found_devices:
+        platform_scan.parse_fru()
+        found_devices = platform_scan.parse_configuration()
+
+    overlay_gen.unload_overlays()  # start fresh
+
+    for pk, pvalue in found_devices.iteritems():
+        for key, element in pvalue.get('exposes', {}).iteritems():
+            if not isinstance(element, dict) or element.get('status', 'disabled') != 'okay':
+                continue
+            element['oem_name'] = element.get('name', key).replace(' ', '_')
+            if element.get("type", "") == "TMP75":
+                element["reg"] = element.get("address").lower()
+                # todo(ed) find a better escape function to use.
+                overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "TMP421":
+                element["reg"] = element.get("address").lower()
+                element["oem_name1"] = element.get("name1").replace(" ", "_").lower()
+                overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "ADC":
+                overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "AspeedFan":
+                if "1U System Fan" in element.get("name", ""):  # todo find correct fan type
+                    element["type"] = 'aspeed_pwmtacho'
+                    overlay_gen.load_entity(**element)

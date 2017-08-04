@@ -1,18 +1,16 @@
 {
     "name": "Intel Front Panel",
-    "probe": "Fru Board ID Starts With FFPANEL or F2USTOPANEL",
-
-    "exposes": [{
-            "name": "Front Panel Temp",
-            "type": "LM75",
-            "address": "0x9A",
-            "bus": "{component bus number}"
-        },
-        {
-            "name": "Front Panel FRU",
-            "type": "IntelFruDevice",
-            "address": "0xAE",
-            "bus": "{component bus number}"
-        }
-    ]
+    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'FFPANEL'\") + fru.probe(\"'BOARD_PRODUCT_NAME': 'F2USTOPANEL'\")",
+    "exposes": {
+      "Front Panel Temp": {
+        "type": "TMP75",
+        "address": "0x4D",
+        "bus": "$bus"
+      },
+      "Front Panel FRU": {
+        "type": "IntelFruDevice",
+        "address": "$fruaddress",
+        "bus": "$bus"
+      }
+    }
 }

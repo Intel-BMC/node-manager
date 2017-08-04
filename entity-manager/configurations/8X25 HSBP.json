@@ -1,19 +1,16 @@
 {
-    "name": "1UX8 HSBP",
-    "probe": "Fru Board ID is F1U8X25S3PHSBP",
-    "other_names": ["2U_HSBP"],
-    "exposes": [{
-            "name": "HSBP {component index} Temperature",
-            "type": "IntelHsbpTempSensor"
-        },
-        {
-            "name": "HSBP {component index} FRU",
+    "exposes": {
+        "HSBP $index FRU": {
             "type": "IntelHsbpFruDevice"
         },
-        {
-            "name": "HSBP {component index} Drive Mux",
+        "HSBP $index Drive Mux": {
             "type": "GenericSMBusMux",
             "address": "0xEB"
+        },
+        "HSBP $index Temperature": {
+            "type": "IntelHsbpTempSensor"
         }
-    ]
+    },
+    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME':'F1U8X25S3PHSBP'\")",
+    "name": "1U_HSBP"
 }

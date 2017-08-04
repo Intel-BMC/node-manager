@@ -1,36 +1,32 @@
 {
     "name": "R1000 Chassis",
-    "probe": "\"Intel Front Panel\" PRESENT AND 2U_HSBP PRESENT",
-
-    "exposes": [{
-            "name": "Fan 1",
-            "type": "IntelFan",
+    // "probe": "'WFP Baseboard' in found_devices and '1U_HSBP' in found_devices",
+    // todo: probe HSBP
+    "probe": "'WFP Baseboard' in found_devices",
+    "exposes": {
+        "Fan 1": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 1"
         },
-        {
-            "name": "Fan 2",
-            "type": "IntelFan",
+        "Fan 2": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 2"
         },
-        {
-            "name": "Fan 3",
-            "type": "IntelFan",
+        "Fan 3": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 3"
         },
-        {
-            "name": "Fan 4",
-            "type": "IntelFan",
+        "Fan 4": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 4"
         },
-        {
-            "name": "Fan 5",
-            "type": "IntelFan",
+        "Fan 5": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 5"
         },
-        {
-            "name": "Fan 6",
-            "type": "IntelFan",
+        "Fan 6": {
+            "type": "AspeedFan",
             "connector": "2U System Fan connector 6"
         }
-    ]
+    }
 }
