@@ -1,0 +1,32 @@
+[{
+  "name": "2U12x35 Riser1",
+  "probe": "fru.probe(\"'BOARD_VERSION_ID': 'A2UL8RISER2'\", fru_address=0x50)",
+  "exposes": {
+    "Riser1 Temp": {
+      "type": "TMP75",
+      "address": "0x48",
+      "bus": "$bus"
+    },
+    "Riser 1 Fru": {
+      "type": "IntelFruDevice",
+      "address": "$fruaddress",
+      "bus": "$bus"
+    }
+  }
+},
+  {
+  "name": "2U12x35 Riser2",
+  "probe": "fru.probe(\"'BOARD_VERSION_ID': 'A2UL8RISER2'\", fru_address=0x51)",
+  "exposes": {
+    "Riser2 Temp": {
+      "type": "TMP75",
+      "address": "0x49",
+      "bus": "$bus"
+    },
+    "Riser 2 Fru": {
+      "type": "IntelFruDevice",
+      "address": "$fruaddress",
+      "bus": "$bus"
+    }
+  }
+}]

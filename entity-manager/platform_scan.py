@@ -66,7 +66,11 @@ class PlatformScan(object):
             with open(os.path.join(self.configuration_dir, json_filename)) as json_file:
                 clean_file = prep_json(json_file)
                 try:
-                    available_entity_list.append(json.load(clean_file))
+                    entities = json.load(clean_file)
+                    if isinstance(entities, list):
+                        available_entity_list += entities
+                    else:
+                        available_entity_list.append(entities)
                 except ValueError as e:
                     traceback.format_exc(e)
                     print("Failed to parse {} error was {}".format(json_file, e))
@@ -150,4 +154,9 @@ if __name__ == '__main__':
 
             elif element.get("type", "") == "AspeedFan":
                 element["type"] = 'aspeed_pwmtacho'
+                overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "IntelFruDevice":
+                element["type"] = 'eeprom'
+                element["reg"] = element.get("address").lower()
                 overlay_gen.load_entity(**element)

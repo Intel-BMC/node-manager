@@ -1,7 +1,5 @@
 {
     "name": "R1000 Chassis",
-    // "probe": "'WFP Baseboard' in found_devices and '1U_HSBP' in found_devices",
-    // todo: probe HSBP
     "probe": "'WFP Baseboard' in found_devices",
     "exposes": {
         "Fan 1": {
