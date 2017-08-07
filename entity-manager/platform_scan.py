@@ -149,6 +149,5 @@ if __name__ == '__main__':
                 overlay_gen.load_entity(**element)
 
             elif element.get("type", "") == "AspeedFan":
-                if "1U System Fan" in element.get("name", ""):  # todo find correct fan type
-                    element["type"] = 'aspeed_pwmtacho'
-                    overlay_gen.load_entity(**element)
+                element["type"] = 'aspeed_pwmtacho'
+                overlay_gen.load_entity(**element)

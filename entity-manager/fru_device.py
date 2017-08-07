@@ -5,9 +5,10 @@ import os
 import re
 import warnings
 import time
+import glob
 
 BASEBOARD_FRU = r'/etc/fru/baseboard.fru.bin'
-TIMEOUT = 1.0
+TIMEOUT = 2.0
 
 
 class FruDeviceProbe(object):
@@ -58,7 +59,9 @@ def i2c_cmd_to_bytes(cmd):
 def find_i2c_frus():
     fru_devices = []
     unknown_i2c_devices = []
-    for bus_index in range(1, 8):
+    i2c_devices = glob.glob('/dev/i2c*')
+    i2c_indexes = (idx.split('-')[1] for idx in i2c_devices)
+    for bus_index in i2c_indexes:
         try:
             result = run_command("i2cdetect -y -r {}".format(bus_index))
             print result
@@ -76,7 +79,7 @@ def find_i2c_frus():
                         unknown_i2c_devices.append((bus_index, device_index))
                     device_index += 1
         except subprocess.CalledProcessError:
-            pass  # TODO(ed) only call valid busses
+            pass
     for i2c_bus_index, i2c_device_index in unknown_i2c_devices:
         try:
             # print "querying bus: {} device {:02X}".format(i2c_bus_index, i2c_device_index)
@@ -117,7 +120,7 @@ def find_i2c_frus():
             # print ""
 
         except subprocess.CalledProcessError:
-            pass  # TODO(ed) only call valid busses
+            pass
     return fru_devices
 
 

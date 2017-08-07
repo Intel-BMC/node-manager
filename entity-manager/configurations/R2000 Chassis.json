@@ -4,27 +4,27 @@
     "exposes": {
         "Fan 1": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 1"
+            "connector": "2U System Fan connector 1"
         },
         "Fan 2": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 2"
+            "connector": "2U System Fan connector 2"
         },
         "Fan 3": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 3"
+            "connector": "2U System Fan connector 3"
         },
         "Fan 4": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 4"
+            "connector": "2U System Fan connector 4"
         },
         "Fan 5": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 5"
+            "connector": "2U System Fan connector 5"
         },
         "Fan 6": {
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 6"
+            "connector": "2U System Fan connector 6"
         }
     }
 }
