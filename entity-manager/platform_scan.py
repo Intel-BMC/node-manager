@@ -59,6 +59,9 @@ class PlatformScan(object):
         with open(os.path.join(CONFIGURATION_DIR, 'sensors.json'), 'w') as sensor_config:
             json.dump(sensors, sensor_config, indent=4)
 
+        # todo make this a dbus endpoint in the fru_device
+        with open(os.path.join(CONFIGURATION_DIR, 'frus.json'), 'w') as fru_config:
+            json.dump(self.fru.get_all(), fru_config, indent=4)
 
     def parse_configuration(self):
 
@@ -130,10 +133,8 @@ class PlatformScan(object):
 
 if __name__ == '__main__':
     platform_scan = PlatformScan()
-    found_devices = platform_scan.read_config()
-    if not found_devices:
-        platform_scan.parse_fru()
-        found_devices = platform_scan.parse_configuration()
+    platform_scan.parse_fru()
+    found_devices = platform_scan.parse_configuration()
 
     overlay_gen.unload_overlays()  # start fresh
 

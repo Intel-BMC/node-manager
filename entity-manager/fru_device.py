@@ -6,6 +6,10 @@ import re
 import warnings
 import time
 import glob
+import struct
+import datetime
+
+INTEL_EPOCH = datetime.datetime(year=1996, month=1, day=1)
 
 BASEBOARD_FRU = r'/etc/fru/baseboard.fru.bin'
 TIMEOUT = 2.0
@@ -40,6 +44,9 @@ class FruDeviceProbe(object):
                 if f['device'] != fru_address:
                     found.remove(f)
         return found
+
+    def get_all(self):
+        return [x['formatted'] for x in self.children]
 
 
 def run_command(command):
@@ -152,7 +159,8 @@ def read_fru(fru_bytes):
                 field_names = ("MANUFACTURER", "PRODUCT_NAME", "SERIAL_NUMBER", "PART_NUMBER", "VERSION_ID")
                 out["BOARD_LANGUAGE_CODE"] = str(fru_bytes[offset])
                 offset += 1
-                out["BOARD_MANUFACTURE_DATE"] = str(fru_bytes[offset:offset + 4])
+                minutes = struct.unpack("<I", str(fru_bytes[offset:offset + 3] + bytearray(1)))[0]
+                out["BOARD_MANUFACTURE_DATE"] = (INTEL_EPOCH + datetime.timedelta(minutes=minutes)).isoformat()
                 offset += 3
             elif area == "PRODUCT":
                 field_names = ("MANUFACTURER", "PRODUCT_NAME", "PART_NUMBER", "PRODUCT_VERSION",
