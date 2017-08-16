@@ -20,7 +20,8 @@ class DimmSensor:
 
     def read(self):
         try:
-            out = subprocess.check_output('{} {} {}'.format(self.path, self.cpu, self.dimm), shell=True)
+            out = subprocess.check_output('{} {} {}'.format(
+                self.path, self.cpu, self.dimm), shell=True)
         except subprocess.CalledProcessError:
             return 0
         if out[0].isdigit():
@@ -28,42 +29,6 @@ class DimmSensor:
             if m:
                 return int(m.group(0))
         return 0
-
-
-class TachSensor:
-
-    def __init__(self, sensor):
-        self.hwmon = os.path.dirname(sensor)
-        self.path = sensor
-        self.type = 'tach'
-        name_count = len(glob.glob(os.path.join(self.hwmon, 'of_node', 'oemname*')))
-        max_temps = len(glob.glob(os.path.join(self.hwmon, 'fan*input')))
-        two_to_one = name_count < max_temps
-
-        index_m = re.search('fan(\d+)_input', os.path.basename(sensor))
-        index = int(index_m.group(1))
-        b_sensor = False
-        if two_to_one:
-            b_sensor = index % 2 == 0
-            index = int((index + 1) / 2)  # todo, will we ever have more than 2:1 ?
-
-        self.name = get_oemname_from_sys(self.hwmon, index)
-        if self.name is None:
-            self.name = os.path.basename(sensor)
-        if b_sensor:
-            self.name += 'b'
-
-        self.units = ''  # rpm
-        self.scale = 0
-        self.timeout = 2000
-
-    def read(self):
-        try:
-            with open(self.path) as f:
-                val = f.read().strip()
-        except IOError:
-            val = 0
-        return int(val)
 
 
 class HwmonTempSensor:
@@ -116,7 +81,8 @@ class RandomSensor:
     def __init__(self):
         self.type = 'random'
         self.float = random.randrange(0, 2)
-        self.name = 'random{}{}'.format('float' if self.float else '', random.randrange(0, 10000))
+        self.name = 'random{}{}'.format(
+            'float' if self.float else '', random.randrange(0, 10000))
 
     def read(self):
         if self.float:
@@ -129,11 +95,13 @@ class WolfPass:
     def __init__(self):
         self.DimmSensors = [DimmSensor(0, dimm) for dimm in range(0, 12)] + \
                            [DimmSensor(1, dimm) for dimm in range(0, 12)]
-        self.TachSensors = [TachSensor(tach) for tach in glob.glob(os.path.join(HWMON_PATH, 'hwmon*', 'fan*input'))]
-        self.TempSensors = [HwmonTempSensor(temp) for temp in glob.glob(os.path.join(HWMON_PATH, 'hwmon*', 'temp*input'))]
-        self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
+        self.TempSensors = [HwmonTempSensor(temp) for temp in glob.glob(
+            os.path.join(HWMON_PATH, 'hwmon*', 'temp*input'))]
+        self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(
+            os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
 
-        self.sensors = [self.DimmSensors] + self.TachSensors + self.TempSensors + self.ADCSensors
+        self.sensors = [self.DimmSensors] + \
+            self.TempSensors + self.ADCSensors
 
     def get_sensors(self):
         return self.sensors
