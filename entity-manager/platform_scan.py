@@ -10,7 +10,7 @@ from utils.generic import prep_json, dict_template_replace
 import warnings
 
 TEMPLATE_CHAR = '$'
-CONFIGURATION_STORE = os.environ.get('JSON_STORE', '/var/configuration/system.json')
+CONFIGURATION_DIR = os.environ.get('JSON_STORE', '/var/configuration/')
 
 
 class PlatformScan(object):
@@ -41,21 +41,24 @@ class PlatformScan(object):
 
     def read_config(self):
         try:
-            with open(CONFIGURATION_STORE) as config:
+            with open(os.path.join(CONFIGURATION_DIR, 'system.json')) as config:
                 self.found_devices = json.load(config)
         except IOError:
             return False
         return self.found_devices
 
     def write_config(self):
-        try:
-            if not os.path.exists(os.path.dirname(CONFIGURATION_STORE)):
-                os.makedirs(os.path.dirname(CONFIGURATION_STORE))
-            with open(CONFIGURATION_STORE, 'w') as config:
-                json_config = json.dumps(self.found_devices, indent=4)
-                config.write(json_config)
-        except IOError:
-            warnings.warn('Failed to write configuration.')
+        if not os.path.exists(os.path.dirname(CONFIGURATION_DIR)):
+            os.makedirs(os.path.dirname(CONFIGURATION_DIR))
+        with open(os.path.join(CONFIGURATION_DIR, 'system.json'), 'w') as config:
+            json.dump(self.found_devices, config, indent=4)
+        sensors = {}
+        for _, value in self.found_devices.iteritems():
+            if isinstance(value, dict) and value.get('exposes', None):
+                sensors.update(value['exposes'])
+        with open(os.path.join(CONFIGURATION_DIR, 'sensors.json'), 'w') as sensor_config:
+            json.dump(sensors, sensor_config, indent=4)
+
 
     def parse_configuration(self):
 
