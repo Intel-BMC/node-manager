@@ -109,7 +109,7 @@ class Tach {
   void setup_read(void) {
     boost::asio::async_read_until(
         input_dev, read_buf, '\n',
-        [this](const boost::system::error_code& ec,
+        [&](const boost::system::error_code& ec,
                std::size_t /*bytes_transfered*/) { handle_response(ec); });
   }
 
