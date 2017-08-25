@@ -7,7 +7,6 @@ import overlay_gen
 import glob
 import traceback
 from utils.generic import prep_json, dict_template_replace
-import warnings
 
 TEMPLATE_CHAR = '$'
 CONFIGURATION_DIR = os.environ.get('JSON_STORE', '/var/configuration/')
@@ -23,21 +22,37 @@ class PlatformScan(object):
         self.fru = FruDeviceProbe()
 
     @staticmethod
-    def is_overlay(d):
-        return 'connector' in list(d)
+    def find_bind(d):
+        for x in list(d):
+            if x.startswith('bind'):
+                return x
+        return False
 
-    def apply_overlay(self, d, name):
-        if 'connector' not in list(d):
+    @staticmethod
+    def has_update(d):
+        return 'update' in list(d)
+
+    def apply_update(self, item):
+        if 'update' not in list(item):
             return False
         for _, entity in self.found_devices.iteritems():
-            for key, child in entity['exposes'].iteritems():
-                if key == d['connector']:
-                    for k, val in d.iteritems():
-                        child[k] = val
-                    child['name'] = name
-                    child['status'] = 'okay'  # todo, should this go here?
+            for child in entity['exposes']:
+                if child['name'] == item['update']:
+                    item.pop('update', None)
+                    child.update(item)
                     return True
-        return False
+
+    def apply_bind(self, item):
+        bind = self.find_bind(item)
+        if not bind:
+            return False
+        for _, entity in self.found_devices.iteritems():
+            for child in entity['exposes']:
+                if child['name'] == item[bind]:
+                    bind_name = bind.split('_')[1]
+                    item[bind_name] = child
+                    item['status'] = item[bind_name]['status'] = 'okay'  # todo, should this go here?
+                    return True
 
     def read_config(self):
         try:
@@ -52,10 +67,10 @@ class PlatformScan(object):
             os.makedirs(os.path.dirname(CONFIGURATION_DIR))
         with open(os.path.join(CONFIGURATION_DIR, 'system.json'), 'w') as config:
             json.dump(self.found_devices, config, indent=4)
-        sensors = {}
+        sensors = []
         for _, value in self.found_devices.iteritems():
             if isinstance(value, dict) and value.get('exposes', None):
-                sensors.update(value['exposes'])
+                sensors += value['exposes']
         with open(os.path.join(CONFIGURATION_DIR, 'sensors.json'), 'w') as sensor_config:
             json.dump(sensors, sensor_config, indent=4)
 
@@ -101,11 +116,14 @@ class PlatformScan(object):
 
                         entity['type'] = 'entity'
                         entity['status'] = 'okay'
-                        removals = set()
-                        for key, item in entity.get('exposes', []).iteritems():
-                            if self.is_overlay(item):
-                                assert (self.apply_overlay(item, key))
-                                removals.add(key)
+
+                        idx = 0
+                        for item in entity.get('exposes', [])[:]:
+                            if self.find_bind(item):
+                                assert (self.apply_bind(item))
+                            elif self.has_update(item):
+                                assert (self.apply_update(item))
+                                entity['exposes'].remove(item)
                             else:
                                 if TEMPLATE_CHAR in str(item):
                                     # todo populate this dict smarter
@@ -115,15 +133,14 @@ class PlatformScan(object):
                                                                                 'index': ii})
                                         if 'status' not in replaced:
                                             replaced['status'] = 'okay'
-                                        entity['exposes'][key] = replaced
+                                        entity['exposes'][idx] = replaced
                                 else:
                                     replaced = item
                                     if 'status' not in replaced:
                                         replaced['status'] = 'okay'
-                                    entity['exposes'][key] = replaced
-                        self.found_devices[entity['name']] = entity
-                        for r in removals:
-                            entity['exposes'].pop(r)
+                                    entity['exposes'][idx] = replaced
+                            self.found_devices[entity['name']] = entity
+                            idx += 1
 
             if len(self.found_devices) == num_devices:
                 break  # exit after looping without additions
@@ -139,10 +156,10 @@ if __name__ == '__main__':
     overlay_gen.unload_overlays()  # start fresh
 
     for pk, pvalue in found_devices.iteritems():
-        for key, element in pvalue.get('exposes', {}).iteritems():
+        for element in pvalue.get('exposes', []):
             if not isinstance(element, dict) or element.get('status', 'disabled') != 'okay':
                 continue
-            element['oem_name'] = element.get('name', key).replace(' ', '_')
+            element['oem_name'] = element.get('name', 'unknown').replace(' ', '_')
             if element.get("type", "") == "TMP75":
                 element["reg"] = element.get("address").lower()
                 # todo(ed) find a better escape function to use.
@@ -157,6 +174,8 @@ if __name__ == '__main__':
                 overlay_gen.load_entity(**element)
 
             elif element.get("type", "") == "AspeedFan":
+                connector = element['connector']
+                element.update(connector)
                 element["type"] = 'aspeed_pwmtacho'
                 overlay_gen.load_entity(**element)
 

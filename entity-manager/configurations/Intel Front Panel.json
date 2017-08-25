@@ -1,16 +1,18 @@
 {
-    "name": "Intel Front Panel",
+    "exposes": [
+        {
+            "bus": "$bus",
+            "type": "IntelFruDevice",
+            "name": "Front Panel FRU",
+            "address": "$fruaddress"
+        },
+        {
+            "bus": "$bus",
+            "type": "TMP75",
+            "name": "Front Panel Temp",
+            "address": "0x4D"
+        }
+    ],
     "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'FFPANEL'\") + fru.probe(\"'BOARD_PRODUCT_NAME': 'F2USTOPANEL'\")",
-    "exposes": {
-      "Front Panel Temp": {
-        "type": "TMP75",
-        "address": "0x4D",
-        "bus": "$bus"
-      },
-      "Front Panel FRU": {
-        "type": "IntelFruDevice",
-        "address": "$fruaddress",
-        "bus": "$bus"
-      }
-    }
+    "name": "Intel Front Panel"
 }

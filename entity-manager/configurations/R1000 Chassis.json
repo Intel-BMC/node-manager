@@ -1,30 +1,36 @@
 {
-    "name": "R1000 Chassis",
-    "probe": "'WFP Baseboard' in found_devices",
-    "exposes": {
-        "Fan 1": {
+    "exposes": [
+        {
+            "bind_connector": "1U System Fan connector 1",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 1"
+            "name": "Fan 1"
         },
-        "Fan 2": {
+        {
+            "bind_connector": "1U System Fan connector 2",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 2"
+            "name": "Fan 2"
         },
-        "Fan 3": {
+        {
+            "bind_connector": "1U System Fan connector 3",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 3"
+            "name": "Fan 3"
         },
-        "Fan 4": {
+        {
+            "bind_connector": "1U System Fan connector 4",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 4"
+            "name": "Fan 4"
         },
-        "Fan 5": {
+        {
+            "bind_connector": "1U System Fan connector 5",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 5"
+            "name": "Fan 5"
         },
-        "Fan 6": {
+        {
+            "bind_connector": "1U System Fan connector 6",
             "type": "AspeedFan",
-            "connector": "1U System Fan connector 6"
+            "name": "Fan 6"
         }
-    }
+    ],
+    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_VERSION_ID': 'F1UL16'\")",
+    "name": "R1000 Chassis"
 }
