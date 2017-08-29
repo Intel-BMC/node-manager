@@ -3,7 +3,7 @@ SET(BUILD_SHARED_LIBRARIES OFF)
 include(ExternalProject)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "-lstdc++fs")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lstdc++fs -Os")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
 option(HUNTER_ENABLED "Enable hunter package pulling" OFF)
@@ -33,7 +33,7 @@ if(EXTERNAL_PROJECT)
     ExternalProject_Add(boost-dbus
             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/boost-dbus
             GIT_REPOSITORY ssh://git-amr-2.devtools.intel.com:29418/openbmc-boost-dbus
-            GIT_TAG f6c7058651c4bba542a1b3ffa041fa276d028d09
+            GIT_TAG 77e62c83d54e15716b16dcaae403b273665f0d50
             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION} -DBOOST_ROOT=${BOOST_ROOT}
             CONFIGURE_COMMAND ""
             BUILD_COMMAND ""
@@ -47,9 +47,9 @@ if(EXTERNAL_PROJECT)
             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/nlohmann-json
             GIT_REPOSITORY https://github.com/nlohmann/json.git
             GIT_TAG c0d511ea500e698061a4b288bd77ce43bd76fa70
-            CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION} -DBOOST_ROOT=${BOOST_ROOT}
+            CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
             CONFIGURE_COMMAND ""
-            BUILD_COMMAND ""
+            BUILD_COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/nlohmann-json/src/nlohmann-json/src/nlohmann && cp ${CMAKE_CURRENT_BINARY_DIR}/nlohmann-json/src/nlohmann-json/src/json.hpp ${CMAKE_CURRENT_BINARY_DIR}/nlohmann-json/src/nlohmann-json/src/nlohmann/json.hpp
             INSTALL_COMMAND ""
             LOG_DOWNLOAD ON
             )
