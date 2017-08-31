@@ -6,6 +6,7 @@
 #include <dbus/connection.hpp>
 #include <dbus/endpoint.hpp>
 #include <dbus/message.hpp>
+#include <dbus/properties.hpp>
 #include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
@@ -42,16 +43,18 @@ bool find_files(const fs::path dir_path, const std::string& match_string,
 
 class Tach {
  public:
-  Tach(std::string& path, std::shared_ptr<dbus::connection> system_bus,
+  Tach(std::string& path, dbus::DbusObjectServer& object_server,
        boost::asio::io_service& io, std::string& fan_name,
        nlohmann::json& json_config)
       : path(path),
-        system_bus(system_bus),
+        object_server(object_server),
         io(io),
         name(boost::replace_all_copy(fan_name, " ", "_")),
         json_config(json_config),
-        dbus_endpoint("", "/xyz/openbmc_project/sensors/tach/" + name,
-                      "org.freedesktop.Dbus.Properties"),
+        dbus_object(object_server.add_object(
+            "/xyz/openbmc_project/sensors/tach/" + name)),
+        dbus_interface(
+            dbus_object->add_interface("xyz.openbmc_project.Sensor")),
         input_dev(io, open(path.c_str(), O_RDONLY)),
         wait_timer(io) {
     setup_read();
@@ -59,11 +62,12 @@ class Tach {
 
  private:
   std::string path;
-  std::shared_ptr<dbus::connection> system_bus;
+  dbus::DbusObjectServer& object_server;
   boost::asio::io_service& io;
   std::string name;
   nlohmann::json& json_config;
-  dbus::endpoint dbus_endpoint;
+  std::shared_ptr<dbus::DbusObject> dbus_object;
+  std::shared_ptr<dbus::DbusInterface> dbus_interface;
   boost::asio::posix::stream_descriptor input_dev;
   boost::asio::deadline_timer wait_timer;
   boost::asio::streambuf read_buf;
@@ -137,19 +141,7 @@ class Tach {
 
   void update_value(float new_value) {
     check_thresholds(new_value);
-
-    auto signal_name = std::string("PropertiesChanged");
-    auto m = dbus::message::new_signal(dbus_endpoint, signal_name);
-    value = new_value;
-
-    std::vector<std::pair<std::string, dbus::dbus_variant>> map2;
-    map2.emplace_back("Value", value);
-    static auto removed = std::vector<uint32_t>();
-
-    m.pack("xyz.openbmc_project.Sensor.Value", map2, removed);
-
-    system_bus->async_send(
-        m, [&](boost::system::error_code ec, dbus::message s) {});
+    dbus_interface->set_property("Value", new_value);
   }
 };
 
@@ -170,6 +162,7 @@ nlohmann::json parse_json(void) {
 int main(int argc, char** argv) {
   boost::asio::io_service io;
   auto system_bus = std::make_shared<dbus::connection>(io, dbus::bus::system);
+  dbus::DbusObjectServer object_server(system_bus);
 
   std::vector<std::string> tach_paths;
   nlohmann::json fan_json = parse_json();
@@ -210,8 +203,8 @@ int main(int argc, char** argv) {
           name += "a";
       }
       std::cout << name << "\n";
-      tachs.emplace_back(
-          std::make_unique<Tach>(tach_paths.at(ii), system_bus, io, name, fan));
+      tachs.emplace_back(std::make_unique<Tach>(tach_paths.at(ii),
+                                                object_server, io, name, fan));
     }
   }
   io.run();

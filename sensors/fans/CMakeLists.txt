@@ -33,7 +33,7 @@ if(EXTERNAL_PROJECT)
     ExternalProject_Add(boost-dbus
             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/boost-dbus
             GIT_REPOSITORY ssh://git-amr-2.devtools.intel.com:29418/openbmc-boost-dbus
-            GIT_TAG 77e62c83d54e15716b16dcaae403b273665f0d50
+            GIT_TAG fc14afc9c0d2f9ee700e8f705649874270a1094a
             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION} -DBOOST_ROOT=${BOOST_ROOT}
             CONFIGURE_COMMAND ""
             BUILD_COMMAND ""
