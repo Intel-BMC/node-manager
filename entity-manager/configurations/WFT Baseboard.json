@@ -1,214 +1,249 @@
 {
-    "name": "WFP Baseboard",
-    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': '.*WFT'\")",
-    "exposes": {
-        "Left Rear Temp": {
-            "type": "TMP75",
-            "address": "0x49",
-            "bus": 6
-        },
-        "Voltage Regulator 1 Temp": {
-            "type": "TMP75",
-            "address": "0x48",
-            "bus": 6
-        },
-        "Voltage Regulator 2 Temp": {
-            "type": "TMP75",
-            "address": "0x4B",
-            "bus": 6
-        },
-        "BMC Temp": {
-            "type": "TMP75",
-            "address": "0x4A",
-            "bus": 6
-        },
-        "Right Rear Board Temp": {
-            "name1": "Right Rear TMP421 Internal Temp",
-            "type": "TMP421",
-            "address": "0x4D",
-            "bus": 6
-        },
-        "Baseboard 12 Volt": {
-            "type": "ADC",
-            "index": 0
-        },
-        "P3V3": {
-            "type": "ADC",
-            "index": 1
-        },
-        "PVNN_PCH_AUX": {
-            "type": "ADC",
-            "index": 2
-        },
-        "P105_PCH_AUX": {
-            "type": "ADC",
-            "index": 3
-        },
-        "P0V83_LAN_AUX": {
-            "type": "ADC",
-            "index": 4
-        },
-        "P12V_AUX": {
-            "type": "ADC",
-            "index": 5
-        },
-        "P1V8_PCH": {
-            "type": "ADC",
-            "index": 6
-        },
-        "P3VBAT": {
-            "type": "ADC",
-            "index": 7
-        },
-        "PVCCIN_CPU0": {
-            "type": "ADC",
-            "index": 8
-        },
-        "PVCCIN_CPU1": {
-            "type": "ADC",
-            "index": 9
-        },
-        "PVDQ_ABC_CPU0": {
-            "type": "ADC",
-            "index": 10
-        },
-        "PVDQ_DEF_CPU0": {
-            "type": "ADC",
-            "index": 11
-        },
-        "PVDQ_ABC_CPU1": {
-            "type": "ADC",
-            "index": 12
-        },
-        "PVDQ_DEF_CPU1": {
-            "type": "ADC",
-            "index": 13
-        },
-        "PVCCIO_CPU0": {
-            "type": "ADC",
-            "index": 14
-        },
-        "PVCCIO_CPU1": {
-            "type": "ADC",
-            "index": 15
-        },
-        "1U System Fan connector 1": {
-            "type": "IntelFanConnector",
+    "exposes": [
+        {
             "status": "disabled",
             "tachs": [
                 1,
                 2
             ],
-            "pwm": 1
-        },
-        "2U System Fan connector 1": {
+            "pwm": 1,
             "type": "IntelFanConnector",
-            "status": "disabled",
-            "tachs": [
-                1
-            ],
-            "pwm": 1
+            "name": "1U System Fan connector 1"
         },
-        "1U System Fan connector 2": {
-            "type": "IntelFanConnector",
+        {
             "status": "disabled",
             "tachs": [
                 3,
                 4
             ],
-            "pwm": 2
-        },
-        "2U System Fan connector 2": {
+            "pwm": 2,
             "type": "IntelFanConnector",
-            "status": "disabled",
-            "tachs": [
-                3
-            ],
-            "pwm": 2
+            "name": "1U System Fan connector 2"
         },
-        "1U System Fan connector 3": {
-            "type": "IntelFanConnector",
+        {
             "status": "disabled",
             "tachs": [
                 5,
                 6
             ],
-            "pwm": 3
-        },
-        "2U System Fan connector 3": {
+            "pwm": 3,
             "type": "IntelFanConnector",
-            "status": "disabled",
-            "tachs": [
-                5
-            ],
-            "pwm": 3
+            "name": "1U System Fan connector 3"
         },
-        "1U System Fan connector 4": {
-            "type": "IntelFanConnector",
+        {
             "status": "disabled",
             "tachs": [
                 7,
                 8
             ],
-            "pwm": 4
-        },
-        "2U System Fan connector 4": {
+            "pwm": 4,
             "type": "IntelFanConnector",
-            "status": "disabled",
-            "tachs": [
-                7
-            ],
-            "pwm": 4
+            "name": "1U System Fan connector 4"
         },
-        "1U System Fan connector 5": {
-            "type": "IntelFanConnector",
+        {
             "status": "disabled",
             "tachs": [
                 9,
                 10
             ],
-            "pwm": 5
-        },
-        "2U System Fan connector 5": {
+            "pwm": 5,
             "type": "IntelFanConnector",
-            "status": "disabled",
-            "tachs": [
-                10
-            ],
-            "pwm": 5
+            "name": "1U System Fan connector 5"
         },
-        "1U System Fan connector 6": {
-            "type": "IntelFanConnector",
+        {
             "status": "disabled",
             "tachs": [
                 11,
                 12
             ],
-            "pwm": 6
-        },
-        "2U System Fan connector 6": {
+            "pwm": 6,
             "type": "IntelFanConnector",
+            "name": "1U System Fan connector 6"
+        },
+        {
+            "status": "disabled",
+            "tachs": [
+                1
+            ],
+            "pwm": 1,
+            "type": "IntelFanConnector",
+            "name": "2U System Fan connector 1"
+        },
+        {
+            "status": "disabled",
+            "tachs": [
+                3
+            ],
+            "pwm": 2,
+            "type": "IntelFanConnector",
+            "name": "2U System Fan connector 2"
+        },
+        {
+            "status": "disabled",
+            "tachs": [
+                5
+            ],
+            "pwm": 3,
+            "type": "IntelFanConnector",
+            "name": "2U System Fan connector 3"
+        },
+        {
+            "status": "disabled",
+            "tachs": [
+                7
+            ],
+            "pwm": 4,
+            "type": "IntelFanConnector",
+            "name": "2U System Fan connector 4"
+        },
+        {
+            "status": "disabled",
+            "tachs": [
+                10
+            ],
+            "pwm": 5,
+            "type": "IntelFanConnector",
+            "name": "2U System Fan connector 5"
+        },
+        {
             "status": "disabled",
             "tachs": [
                 12
             ],
-            "pwm": 6
-        },
-        "CPU 1 Fan Connector": {
+            "pwm": 6,
             "type": "IntelFanConnector",
+            "name": "2U System Fan connector 6"
+        },
+        {
+            "bus": 6,
+            "type": "TMP75",
+            "name": "BMC Temp",
+            "address": "0x4A"
+        },
+        {
+            "index": 0,
+            "type": "ADC",
+            "name": "Baseboard 12 Volt"
+        },
+        {
             "status": "disabled",
             "tachs": [
                 13
             ],
-            "pwm": 7
-        },
-        "CPU 2 Fan Connector": {
+            "pwm": 7,
             "type": "IntelFanConnector",
+            "name": "CPU 1 Fan Connector"
+        },
+        {
             "status": "disabled",
             "tachs": [
                 14
             ],
-            "pwm": 8
+            "pwm": 8,
+            "type": "IntelFanConnector",
+            "name": "CPU 2 Fan Connector"
+        },
+        {
+            "bus": 6,
+            "type": "TMP75",
+            "name": "Left Rear Temp",
+            "address": "0x49"
+        },
+        {
+            "index": 4,
+            "type": "ADC",
+            "name": "P0V83_LAN_AUX"
+        },
+        {
+            "index": 3,
+            "type": "ADC",
+            "name": "P105_PCH_AUX"
+        },
+        {
+            "index": 5,
+            "type": "ADC",
+            "name": "P12V_AUX"
+        },
+        {
+            "index": 6,
+            "type": "ADC",
+            "name": "P1V8_PCH"
+        },
+        {
+            "index": 1,
+            "type": "ADC",
+            "name": "P3V3"
+        },
+        {
+            "index": 7,
+            "type": "ADC",
+            "name": "P3VBAT"
+        },
+        {
+            "index": 8,
+            "type": "ADC",
+            "name": "PVCCIN_CPU0"
+        },
+        {
+            "index": 9,
+            "type": "ADC",
+            "name": "PVCCIN_CPU1"
+        },
+        {
+            "index": 14,
+            "type": "ADC",
+            "name": "PVCCIO_CPU0"
+        },
+        {
+            "index": 15,
+            "type": "ADC",
+            "name": "PVCCIO_CPU1"
+        },
+        {
+            "index": 10,
+            "type": "ADC",
+            "name": "PVDQ_ABC_CPU0"
+        },
+        {
+            "index": 12,
+            "type": "ADC",
+            "name": "PVDQ_ABC_CPU1"
+        },
+        {
+            "index": 11,
+            "type": "ADC",
+            "name": "PVDQ_DEF_CPU0"
+        },
+        {
+            "index": 13,
+            "type": "ADC",
+            "name": "PVDQ_DEF_CPU1"
+        },
+        {
+            "index": 2,
+            "type": "ADC",
+            "name": "PVNN_PCH_AUX"
+        },
+        {
+            "bus": 6,
+            "name1": "Right Rear TMP421 Internal Temp",
+            "type": "TMP421",
+            "name": "Right Rear Board Temp",
+            "address": "0x4D"
+        },
+        {
+            "bus": 6,
+            "type": "TMP75",
+            "name": "Voltage Regulator 1 Temp",
+            "address": "0x48"
+        },
+        {
+            "bus": 6,
+            "type": "TMP75",
+            "name": "Voltage Regulator 2 Temp",
+            "address": "0x4B"
         }
-    }
+    ],
+    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': '.*WFT'\")",
+    "name": "WFP Baseboard"
 }
