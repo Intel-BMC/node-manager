@@ -40,21 +40,24 @@ class SensorObject(dbus.service.Object):
     def PropertiesChanged(self, property, value, invalid):
         pass
 
-    @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='s', out_signature='v')
-    def Get(self, name):
-        if name == 'Value':
-            return self.value
+    @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='ss', out_signature='v')
+    def Get(self, interface, property):
+        if interface == "xyz.openbmc_project.Sensor":
+            if property == 'Value':
+                return self.value if self.value else 0
+        return None
 
-    @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='s', out_signature='v')
-    def Set(self, name):
-        if name == 'Value':
-            return self.value
+    @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='ssv', out_signature='v')
+    def Set(self, interface, property, value):
+        return None
 
     @dbus.service.method('org.freedesktop.DBus.Properties', in_signature='s', out_signature='a{sv}')
-    def GetAll(self, name):
+    def GetAll(self, interface):
+        if interface != "xyz.openbmc_project.Sensor":
+            return None
         ret_dict = {}
         if self.value:
-            ret_dict["Value"] = self.value
+            ret_dict["Value"] = self.value if self.value else 0
         return ret_dict
 
     @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='', out_signature='a{oa{sa{sv}}}')

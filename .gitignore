@@ -1,2 +1,3 @@
 entity-manager/out/*
 *.idea
+.vscode
