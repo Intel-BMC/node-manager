@@ -1,6 +1,6 @@
 [{
   "name": "1Ux16 Riser 1",
-  "probe": "fru.probe(\"'BOARD_VERSION_ID': 'F1UL16'\", fru_address=0x50)",
+  "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\", fru_address=0x50)",
   "exposes": [
     {
       "name" : "Riser 1 Temp",
@@ -18,7 +18,7 @@
 },
   {
   "name": "1Ux16 Riser 2",
-  "probe": "fru.probe(\"'BOARD_VERSION_ID': 'F1UL16'\", fru_address=0x51)",
+  "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\", fru_address=0x51)",
   "exposes": [
     {
       "name": "Riser 2 Temp",

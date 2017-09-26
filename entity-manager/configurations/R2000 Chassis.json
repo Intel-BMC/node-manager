@@ -31,6 +31,6 @@
             "name": "Fan 6"
         }
     ],
-    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_VERSION_ID': 'F2U12X35S3P'\")",
+    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'\")",
     "name": "R2000 Chassis"
 }

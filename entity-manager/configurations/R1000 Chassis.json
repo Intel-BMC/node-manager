@@ -31,6 +31,6 @@
             "name": "Fan 6"
         }
     ],
-    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_VERSION_ID': 'F1UL16'\")",
+    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\")",
     "name": "R1000 Chassis"
 }
