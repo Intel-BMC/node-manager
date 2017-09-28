@@ -7,7 +7,6 @@ THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class TestPlatformScan(unittest.TestCase):
-
     def test_parse_configuration_1u(self):
         fru_dev = fru_device.FruDeviceProbe()
         fru_dev.children = \
@@ -30,18 +29,19 @@ class TestPlatformScan(unittest.TestCase):
              {'device': 80,
               'bus': '2',
               'fru': bytearray(
-                  b'\x01\x01\x00\x02\x00\x00\x00\xfc\x10\x00\x00\x00\x00'
-                  b'\x00\x00\x01\x10\n\x00\x00\x00\x00\x00\x00\x00\xd1'
-                  b'Intel Corporation\xc6F1UL16\xcc............\xca......'
-                  b'....\xccFRU Ver 0.04\xc0\xc1\xff\xff\xff\xff\xff\xff'
-                  b'\xff')},
+                  b'\x01\x01\x00\x02\x00\x00\x00\xfc\x01\x00\x00\x00\x00'
+                  b'\x00\x00\x01\x01\x1e\x00v\xc5\xa5\xd1Intel Corporation'
+                  b'\xccF1UL16RISER1\xccBQWK63400247\xcaH88399-200\xccFRU '
+                  b'Ver 0.02\xd1Field not present\xc1'
+              )},
              {'device': 81,
               'bus': '2',
               'fru': bytearray(
-                  b'\x01\x01\x00\x02\x00\x00\x00\xfc\x10\x00\x00\x00\x00'
-                  b'\x00\x00\x01\x10\n\x00\x00\x00\x00\x00\x00\x00\xd1'
-                  b'Intel Corporation\xc6F1UL16\xcc............\xca..........'
-                  b'\xccFRU Ver 0.04\xc0\xc1\xff\xff\xff\xff\xff\xff\xff')},
+                  b'\x01\x01\x00\x02\x00\x00\x00\xfc\x01\x00\x00\x00\x00'
+                  b'\x00\x00\x01\x01\x1e\x00v\xc5\xa5\xd1Intel Corporation'
+                  b'\xccF1UL16RISER2\xccBQWK63400247\xcaH88399-200\xccFRU '
+                  b'Ver 0.02\xd1Field not present\xc1'
+              )},
              {'device': 113,
               'bus': '2',
               'fru': bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00')},
