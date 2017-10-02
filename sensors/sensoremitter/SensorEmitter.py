@@ -21,7 +21,7 @@ class SensorObject(dbus.service.Object):
         self.value = None
         self.sensor = sensor
         self.poll_num = 0
-        self.InterfacesAdded(self.object_name, {"xyz.openbmc_project.sensors": {"Value": ""}})
+        self.InterfacesAdded(self.object_name, {"xyz.openbmc_project.Sensor": {"Value": ""}})
 
     def poll(self):
         value = self.sensor.read()
@@ -33,7 +33,7 @@ class SensorObject(dbus.service.Object):
             self.value = value
             self.poll_num = 0
 
-            self.PropertiesChanged("xyz.openbmc_project.Sensor.Value", {"Value": self.value}, [])
+            self.PropertiesChanged("xyz.openbmc_project.Sensor", {"Value": self.value}, [])
         return True
 
     @dbus.service.signal('org.freedesktop.DBus.Properties', signature='sa{sv}as')
@@ -62,13 +62,13 @@ class SensorObject(dbus.service.Object):
 
     @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='', out_signature='a{oa{sa{sv}}}')
     def GetManagedObjects(self):
-        return {self.object_name: {"xyz.openbmc_project.sensors": {"Value": ""}}}
+        return {self.object_name: {"xyz.openbmc_project.Sensor": {"Value": self.value if self.value else 0}}}
 
     @dbus.service.signal('org.freedesktop.DBus.ObjectManager', signature='oa{sa{sv}}')
     def InterfacesAdded(self, object_name, interfaces):
         pass
 
-    @dbus.service.method('xyz.openbmc_project.sensors',
+    @dbus.service.method('xyz.openbmc_project.Sensor',
                          in_signature='', out_signature='')
     def exit(self):
         loop.quit()
