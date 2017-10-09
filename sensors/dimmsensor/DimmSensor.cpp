@@ -13,7 +13,7 @@
 
 #define RDPCICFGLOCAL_WRITE_LEN 5
 #define RDPCICFGLOCAL_READ_LEN_BASE 1
-#define PECI_IOCXFER 0xc0045002
+#define PECI_IOC_XFER 0xc0045000
 #define PECI_BASE_ADDR 0x30
 #define PECI_DIMM_TEMP_REG 0x150
 #define RDPCICFGLOCAL_PECI_CMD 0xe1
@@ -107,9 +107,9 @@ auto peci_config_local(uint8_t u8target, uint8_t u8bus, uint8_t u8device,
   msg->tx_buf[3] = (u32Address >> 8) & 0xFF;
   msg->tx_buf[4] = (u32Address >> 16) & 0xFF;
 
-  fd = open("/dev/peci-aspeed", O_RDWR | O_CLOEXEC);
+  fd = open("/dev/peci", O_RDWR | O_CLOEXEC);
   if (fd >= 0) {
-    int success = ioctl(fd, PECI_IOCXFER, msg.get());
+    int success = ioctl(fd, PECI_IOC_XFER, msg.get());
     if (success == 0) {
       if (DEV_PECI_CC_SUCCESS == msg->rx_buf[0]) {
         ret.resize(RDPCICFGLOCAL_READ_LEN_BASE + u8readlen - 1);
