@@ -1,14 +1,30 @@
+/*
+// Copyright (c) 2017 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+*/
+
 #include <limits.h>
 #include <unistd.h>
 #include <TachSensor.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <dbus/connection.hpp>
 #include <dbus/endpoint.hpp>
 #include <dbus/message.hpp>
 #include <iostream>
 #include <string>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #define PWM_POLL_MS 500
 
@@ -21,7 +37,7 @@ TachSensor::TachSensor(std::string& path, dbus::DbusObjectServer& object_server,
       name(boost::replace_all_copy(fan_name, " ", "_")),
       json_config(json_config),
       dbus_object(object_server.add_object(
-          "/xyz/openbmc_project/sensors/tach/" + name)),
+          "/xyz/openbmc_project/Sensors/tach/" + name)),
       dbus_interface(dbus_object->add_interface("xyz.openbmc_project.Sensor")),
       input_dev(io, open(path.c_str(), O_RDONLY)),
       wait_timer(io),
@@ -70,6 +86,7 @@ void TachSensor::handle_response(const boost::system::error_code& err) {
 
 void TachSensor::check_thresholds(float new_value) {
   int index = boost::ends_with(name, "b") ? 1 : 0;
+  if (json_config["thresholds"].is_null()) return;
   auto thresholds = json_config["thresholds"].at(index);
   for (auto& threshold : thresholds) {
     if (threshold["direction"] == "less than") {

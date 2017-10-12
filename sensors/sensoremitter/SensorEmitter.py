@@ -12,10 +12,11 @@ from SensorEmitterConfig import WolfPass
 
 FAIL_TIMEOUT = 5
 
+
 class SensorObject(dbus.service.Object):
 
     def __init__(self, conn, sensor):
-        self.object_name = '/xyz/openbmc_project/sensors/{}/{}'.format(sensor.type, sensor.name)
+        self.object_name = '/xyz/openbmc_project/Sensors/{}/{}'.format(sensor.type, sensor.name)
         dbus.service.Object.__init__(self, conn, self.object_name)
         self.timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
         self.value = None

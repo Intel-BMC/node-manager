@@ -99,7 +99,7 @@
         {
             "status": "disabled",
             "tachs": [
-                10
+                9
             ],
             "pwm": 5,
             "type": "IntelFanConnector",
@@ -108,7 +108,7 @@
         {
             "status": "disabled",
             "tachs": [
-                12
+                11
             ],
             "pwm": 6,
             "type": "IntelFanConnector",
