@@ -16,13 +16,17 @@ FAIL_TIMEOUT = 5
 class SensorObject(dbus.service.Object):
 
     def __init__(self, conn, sensor):
-        self.object_name = '/xyz/openbmc_project/Sensors/{}/{}'.format(sensor.type, sensor.name)
+        self.object_name = '/xyz/openbmc_project/Sensors/{}/{}'.format(
+            sensor.type, sensor.name)
         dbus.service.Object.__init__(self, conn, self.object_name)
         self.timeout = sensor.timeout if hasattr(sensor, 'timeout') else 1000
         self.value = None
         self.sensor = sensor
         self.poll_num = 0
-        self.InterfacesAdded(self.object_name, {"xyz.openbmc_project.Sensor": {"Value": ""}})
+        self.maxValue = 0xFF  # default, updated via config if needed
+        self.minValue = 0x0
+        self.InterfacesAdded(self.object_name, {
+                             "xyz.openbmc_project.Sensor": {"Value": ""}})
 
     def poll(self):
         value = self.sensor.read()
@@ -34,7 +38,8 @@ class SensorObject(dbus.service.Object):
             self.value = value
             self.poll_num = 0
 
-            self.PropertiesChanged("xyz.openbmc_project.Sensor", {"Value": self.value}, [])
+            self.PropertiesChanged("xyz.openbmc_project.Sensor", {
+                                   "Value": self.value}, [])
         return True
 
     @dbus.service.signal('org.freedesktop.DBus.Properties', signature='sa{sv}as')
@@ -63,7 +68,12 @@ class SensorObject(dbus.service.Object):
 
     @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='', out_signature='a{oa{sa{sv}}}')
     def GetManagedObjects(self):
-        return {self.object_name: {"xyz.openbmc_project.Sensor": {"Value": self.value if self.value else 0}}}
+        return {self.object_name: {"xyz.openbmc_project.Sensor": {"Value": self.value if self.value else 0,
+                                                                  "MaxValue": self.maxValue, "MinValue": self.minValue},
+                                   "xyz.openbmc_project.Sensor.Threshold.Warning": {
+            "WarningHigh": self.maxValue * .8, "WarningLow": self.maxValue * .1},
+            "xyz.openbmc_project.Sensor.Threshold.Critical": {
+            "CriticalHigh": self.maxValue * .9, "CriticalLow": self.maxValue * .05}}}
 
     @dbus.service.signal('org.freedesktop.DBus.ObjectManager', signature='oa{sa{sv}}')
     def InterfacesAdded(self, object_name, interfaces):
@@ -74,9 +84,10 @@ class SensorObject(dbus.service.Object):
     def exit(self):
         loop.quit()
 
+
 def sensor_thread(sensor):
     system_bus = dbus.SystemBus()
-    time.sleep(random.uniform(0, 1)) # to stagger sensors
+    time.sleep(random.uniform(0, 1))  # to stagger sensors
     if isinstance(sensor, list):
         objs = []
         for sens in sensor:
@@ -93,6 +104,7 @@ def sensor_thread(sensor):
                 time.sleep(FAIL_TIMEOUT)
             else:
                 time.sleep(obj.timeout * (10 ** -3))
+
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
