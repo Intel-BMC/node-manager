@@ -28,9 +28,9 @@
 
 #define PWM_POLL_MS 500
 
-TachSensor::TachSensor(std::string& path, dbus::DbusObjectServer& object_server,
-                       boost::asio::io_service& io, std::string& fan_name,
-                       nlohmann::json& json_config)
+TachSensor::TachSensor(std::string &path, dbus::DbusObjectServer &object_server,
+                       boost::asio::io_service &io, std::string &fan_name,
+                       nlohmann::json &json_config)
     : path(path),
       object_server(object_server),
       io(io),
@@ -42,18 +42,22 @@ TachSensor::TachSensor(std::string& path, dbus::DbusObjectServer& object_server,
       input_dev(io, open(path.c_str(), O_RDONLY)),
       wait_timer(io),
       value(FLT_MAX),
-      err_count(0) {
+      err_count(0),
+      // todo, get these from config
+      max_value(25000),
+      min_value(0) {
+  set_initial_properties();
   setup_read();
 }
 
 void TachSensor::setup_read(void) {
   boost::asio::async_read_until(
       input_dev, read_buf, '\n',
-      [&](const boost::system::error_code& ec,
+      [&](const boost::system::error_code &ec,
           std::size_t /*bytes_transfered*/) { handle_response(ec); });
 }
 
-void TachSensor::handle_response(const boost::system::error_code& err) {
+void TachSensor::handle_response(const boost::system::error_code &err) {
   if (!err) {
     err_count = 0;
     std::istream response_stream(&read_buf);
@@ -81,14 +85,14 @@ void TachSensor::handle_response(const boost::system::error_code& err) {
   input_dev.assign(open(path.c_str(), O_RDONLY));
   wait_timer.expires_from_now(boost::posix_time::milliseconds(PWM_POLL_MS));
   wait_timer.async_wait(
-      [&](const boost::system::error_code&) { setup_read(); });
+      [&](const boost::system::error_code &) { setup_read(); });
 }
 
 void TachSensor::check_thresholds(float new_value) {
   int index = boost::ends_with(name, "b") ? 1 : 0;
   if (json_config["thresholds"].is_null()) return;
   auto thresholds = json_config["thresholds"].at(index);
-  for (auto& threshold : thresholds) {
+  for (auto &threshold : thresholds) {
     if (threshold["direction"] == "less than") {
       if (value >= threshold["value"] && new_value < threshold["value"]) {
         std::cout << "threshold crossed!\n";  // todo(james) assert on dbus
@@ -113,4 +117,10 @@ void TachSensor::check_thresholds(float new_value) {
 void TachSensor::update_value(float new_value) {
   check_thresholds(new_value);
   dbus_interface->set_property("Value", new_value);
+}
+
+// todo, get this from configuration
+void TachSensor::set_initial_properties(void) {
+  dbus_interface->set_property("MaxValue", max_value);
+  dbus_interface->set_property("MinValue", min_value);
 }
