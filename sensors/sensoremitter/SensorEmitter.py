@@ -85,13 +85,32 @@ class SensorObject(dbus.service.Object):
         loop.quit()
 
 
-def sensor_thread(sensor):
+class RootObject(dbus.service.Object):
+    def __init__(self):
+        self.object_name = '/'
+        self.sensors = []
+        dbus.service.Object.__init__(self, dbus.SystemBus(), self.object_name)
+
+    def add_sensor(self, sensor):
+        self.sensors.append(sensor)
+
+    @dbus.service.method('org.freedesktop.DBus.ObjectManager', in_signature='', out_signature='a{oa{sa{sv}}}')
+    def GetManagedObjects(self):
+        managed_object = {}
+        for sensor in self.sensors:
+            for key, val in sensor.GetManagedObjects().iteritems():
+                managed_object[key] = val
+        return managed_object
+
+
+def sensor_thread(sensor, root):
     system_bus = dbus.SystemBus()
     time.sleep(random.uniform(0, 1))  # to stagger sensors
     if isinstance(sensor, list):
         objs = []
         for sens in sensor:
             objs.append(SensorObject(system_bus, sens))
+            root.add_sensor(objs[-1])
         while True:
             for obj in objs:
                 obj.poll()
@@ -99,6 +118,7 @@ def sensor_thread(sensor):
 
     else:
         obj = SensorObject(system_bus, sensor)
+        root.add_sensor(obj)
         while True:
             if not obj.poll():
                 time.sleep(FAIL_TIMEOUT)
@@ -110,8 +130,9 @@ if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     gobject.threads_init()
     config = WolfPass()
+    root = RootObject()
     for sensor in config.get_sensors():
-        thread = threading.Thread(target=sensor_thread, args=(sensor,))
+        thread = threading.Thread(target=sensor_thread, args=[sensor, root])
         thread.start()
     loop = gobject.MainLoop()
     loop.run()
