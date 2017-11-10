@@ -128,6 +128,8 @@ def sensor_thread(sensor, root):
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    name = dbus.service.BusName(
+        "org.openbmc.SensorEmitter", dbus.SystemBus())
     gobject.threads_init()
     config = WolfPass()
     root = RootObject()
