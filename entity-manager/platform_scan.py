@@ -179,6 +179,9 @@ if __name__ == '__main__':
                 element["type"] = 'aspeed_pwmtacho'
                 overlay_gen.load_entity(**element)
 
+            elif element.get("type", "") == "ASPEED_PECI_HWMON":
+                overlay_gen.load_entity(**element)
+
             elif element.get("type", "") == "IntelFruDevice":
                 element["type"] = 'eeprom'
                 element["reg"] = element.get("address").lower()

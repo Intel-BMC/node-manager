@@ -1,0 +1,64 @@
+/dts-v1/;
+/plugin/;
+/ {
+    compatible = "$platform";
+    fragment@0{
+        target = <&peci_hwmon$cpu_id>;
+        __overlay__{
+            show-core = <$show_core>;
+            dimm-nums = <$dimm_nums>;
+            status = "okay";
+
+            oemname1 = "$name1";
+            oemname2 = "$name2";
+            oemname3 = "$name3";
+            oemname4 = "$name4";
+
+            oemname100 = "$name100";
+            oemname101 = "$name101";
+            oemname102 = "$name102";
+            oemname103 = "$name103";
+            oemname104 = "$name104";
+            oemname105 = "$name105";
+            oemname106 = "$name106";
+            oemname107 = "$name107";
+            oemname108 = "$name108";
+            oemname109 = "$name109";
+            oemname110 = "$name110";
+            oemname111 = "$name111";
+            oemname112 = "$name112";
+            oemname113 = "$name113";
+            oemname114 = "$name114";
+            oemname115 = "$name115";
+            oemname116 = "$name116";
+            oemname117 = "$name117";
+            oemname118 = "$name118";
+            oemname119 = "$name119";
+            oemname120 = "$name120";
+            oemname121 = "$name121";
+            oemname122 = "$name122";
+            oemname123 = "$name123";
+            oemname124 = "$name124";
+            oemname125 = "$name125";
+            oemname126 = "$name126";
+            oemname127 = "$name127";
+
+            oemname200 = "$name200";
+            oemname201 = "$name201";
+            oemname202 = "$name202";
+            oemname203 = "$name203";
+            oemname204 = "$name204";
+            oemname205 = "$name205";
+            oemname206 = "$name206";
+            oemname207 = "$name207";
+            oemname208 = "$name208";
+            oemname209 = "$name209";
+            oemname210 = "$name210";
+            oemname211 = "$name211";
+            oemname212 = "$name212";
+            oemname213 = "$name213";
+            oemname214 = "$name214";
+            oemname215 = "$name215";
+        };
+    };
+};
