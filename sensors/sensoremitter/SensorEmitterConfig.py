@@ -7,30 +7,6 @@ import glob
 HWMON_PATH = '/sys/class/hwmon'
 
 
-class DimmSensor:
-
-    def __init__(self, cpu, dimm):
-        self.path = '/usr/bin/dimmsensor'
-        self.cpu = cpu
-        self.dimm = dimm
-        self.type = 'temperature'
-        self.name = 'cpu{}dimm{}'.format(cpu, dimm)
-        self.units = 'C'
-        self.scale = 0
-
-    def read(self):
-        try:
-            out = subprocess.check_output('{} {} {}'.format(
-                self.path, self.cpu, self.dimm), shell=True)
-        except subprocess.CalledProcessError:
-            return 0
-        if out[0].isdigit():
-            m = re.search('\d+', out)
-            if m:
-                return int(m.group(0))
-        return 0
-
-
 class HwmonTempSensor:
 
     def __init__(self, sensor):
@@ -93,15 +69,12 @@ class RandomSensor:
 class WolfPass:
 
     def __init__(self):
-        self.DimmSensors = [DimmSensor(0, dimm) for dimm in range(0, 12)] + \
-                           [DimmSensor(1, dimm) for dimm in range(0, 12)]
         self.TempSensors = [HwmonTempSensor(temp) for temp in glob.glob(
             os.path.join(HWMON_PATH, 'hwmon*', 'temp*input'))]
         self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(
             os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
 
-        self.sensors = [self.DimmSensors] + \
-            self.TempSensors + self.ADCSensors
+        self.sensors = self.TempSensors + self.ADCSensors
 
     def get_sensors(self):
         return self.sensors
