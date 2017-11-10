@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
             elif element.get("type", "") == "TMP421":
                 element["reg"] = element.get("address").lower()
-                element["oem_name1"] = element.get("name1").replace(" ", "_").lower()
+                element["oem_name1"] = element.get("name1").replace(" ", "_")
                 overlay_gen.load_entity(**element)
 
             elif element.get("type", "") == "ADC":
