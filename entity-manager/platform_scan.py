@@ -179,7 +179,8 @@ if __name__ == '__main__':
                 element["type"] = 'aspeed_pwmtacho'
                 overlay_gen.load_entity(**element)
 
-            elif element.get("type", "") == "ASPEED_PECI_HWMON":
+            elif element.get("type", "") == "SkylakeCPU":
+                element["type"] = 'aspeed_peci_hwmon'
                 overlay_gen.load_entity(**element)
 
             elif element.get("type", "") == "IntelFruDevice":
