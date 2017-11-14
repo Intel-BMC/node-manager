@@ -6,6 +6,8 @@ import glob
 
 HWMON_PATH = '/sys/class/hwmon'
 
+# these are only whitelisted until a user space application has been written
+TEMP_SENSOR_WHITELIST = ['peci-hwmon-cpu0', 'peci-hwmon-cpu1']
 
 class HwmonTempSensor:
 
@@ -69,8 +71,7 @@ class RandomSensor:
 class WolfPass:
 
     def __init__(self):
-        self.TempSensors = [HwmonTempSensor(temp) for temp in glob.glob(
-            os.path.join(HWMON_PATH, 'hwmon*', 'temp*input'))]
+        self.TempSensors = [HwmonTempSensor(temp) for temp in get_temp_sensors()]
         self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(
             os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
 
@@ -118,3 +119,19 @@ def get_scale_from_sys(hwmon_path, default=-3):
         return default
 
     return scale
+
+
+def get_temp_sensors():
+    sensors = []
+    hwmons = glob.glob(os.path.join(HWMON_PATH, 'hwmon*'))
+    for h in hwmons:
+        name_file = os.path.join(h, 'of_node', 'name')
+        try:
+            with open(name_file) as f:
+                name = f.read()
+        except IOError:
+            continue
+        name = name.rstrip('\0')
+        if name in TEMP_SENSOR_WHITELIST:
+            sensors += glob.glob(os.path.join(h, "temp*input"))
+    return sensors
