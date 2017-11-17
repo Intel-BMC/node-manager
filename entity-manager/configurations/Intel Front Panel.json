@@ -10,7 +10,35 @@
             "bus": "$bus",
             "type": "TMP75",
             "name": "Front Panel Temp",
-            "address": "0x4D"
+            "address": "0x4D",
+            "thresholds": [
+                  [
+                     {
+                          "direction": "greater than",
+                          "name": "upper critical",
+                          "value": 55,
+                          "severity": 1
+                      },
+                      {
+                          "direction": "greater than",
+                          "name": "upper non critical",
+                          "value": 50,
+                          "severity": 0
+                      },
+                      {
+                          "direction": "less than",
+                          "name": "lower non critical",
+                          "value": 5,
+                          "severity": 0
+                      },
+                      {
+                          "direction": "less than",
+                          "name": "lower critical",
+                          "value": 0,
+                          "severity": 1
+                      }
+                  ]
+            ]
         }
     ],
     "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'FFPANEL'\") + fru.probe(\"'BOARD_PRODUCT_NAME': 'F2USTOPANEL'\")",

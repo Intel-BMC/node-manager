@@ -124,6 +124,7 @@ class PlatformScan(object):
                             elif self.has_update(item):
                                 assert (self.apply_update(item))
                                 entity['exposes'].remove(item)
+                                idx -= 1
                             else:
                                 if TEMPLATE_CHAR in str(item):
                                     # todo populate this dict smarter
@@ -139,6 +140,7 @@ class PlatformScan(object):
                                     if 'status' not in replaced:
                                         replaced['status'] = 'okay'
                                     entity['exposes'][idx] = replaced
+
                             self.found_devices[entity['name']] = entity
                             idx += 1
 
