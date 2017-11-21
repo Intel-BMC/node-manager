@@ -9,8 +9,8 @@ HWMON_PATH = '/sys/class/hwmon'
 # these are only whitelisted until a user space application has been written
 TEMP_SENSOR_WHITELIST = ['peci-hwmon-cpu0', 'peci-hwmon-cpu1']
 
-class HwmonTempSensor:
 
+class HwmonTempSensor:
     def __init__(self, sensor):
         self.hwmon = os.path.dirname(sensor)
         self.path = sensor
@@ -33,29 +33,7 @@ class HwmonTempSensor:
         return int(val) * (10 ** self.scale)
 
 
-class ADCSensor:
-
-    def __init__(self, sensor):
-        self.hwmon = os.path.dirname(sensor)
-        self.path = sensor
-        self.type = 'voltage'
-        self.scale = get_scale_from_sys(self.hwmon)
-        index_m = re.search('in(\d+)_input', os.path.basename(sensor))
-        index = index_m.group(1)
-        self.name = get_oemname_from_sys(self.hwmon, index)
-        if self.name is None:
-            self.name = os.path.basename(sensor)
-        self.units = 'V'
-
-    def read(self):
-        with open(self.path) as f:
-            val = f.read().strip()
-
-        return int(val) * (10 ** self.scale)
-
-
 class RandomSensor:
-
     def __init__(self):
         self.type = 'random'
         self.float = random.randrange(0, 2)
@@ -69,20 +47,15 @@ class RandomSensor:
 
 
 class WolfPass:
-
     def __init__(self):
         self.TempSensors = [HwmonTempSensor(temp) for temp in get_temp_sensors()]
-        self.ADCSensors = [ADCSensor(adc) for adc in glob.glob(
-            os.path.join(find_hwmon('iio-hwmon'), 'in*input'))]
-
-        self.sensors = self.TempSensors + self.ADCSensors
+        self.sensors = self.TempSensors
 
     def get_sensors(self):
         return self.sensors
 
 
 class Test:
-
     def __init__(self):
         self.sensors = [RandomSensor() for _ in range(0, 100)]
 
