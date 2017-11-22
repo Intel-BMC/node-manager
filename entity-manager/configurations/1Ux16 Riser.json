@@ -6,7 +6,35 @@
       "name" : "Riser 1 Temp",
       "type": "TMP75",
       "address": "0x48",
-      "bus": "$bus"
+      "bus": "$bus",
+      "thresholds": [
+                [
+                   {
+                        "direction": "greater than",
+                        "name": "upper critical",
+                        "value": 80,
+                        "severity": 1
+                    },
+                    {
+                        "direction": "greater than",
+                        "name": "upper non critical",
+                        "value": 75,
+                        "severity": 0
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower non critical",
+                        "value": 5,
+                        "severity": 0
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower critical",
+                        "value": 0,
+                        "severity": 1
+                    }
+                ]
+      ]
     },
     {
       "name": "Riser 1 Fru",
@@ -24,7 +52,35 @@
       "name": "Riser 2 Temp",
       "type": "TMP75",
       "address": "0x49",
-      "bus": "$bus"
+      "bus": "$bus",
+      "thresholds": [
+                [
+                   {
+                        "direction": "greater than",
+                        "name": "upper critical",
+                        "value": 80,
+                        "severity": 1
+                    },
+                    {
+                        "direction": "greater than",
+                        "name": "upper non critical",
+                        "value": 75,
+                        "severity": 0
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower non critical",
+                        "value": 5,
+                        "severity": 0
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower critical",
+                        "value": 0,
+                        "severity": 1
+                    }
+                ]
+      ]
     },
    {
      "name":  "Riser 2 Fru",
