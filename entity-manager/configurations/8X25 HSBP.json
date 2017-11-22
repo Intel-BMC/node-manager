@@ -1,19 +1,19 @@
 {
     "exposes": [
         {
-            "type": "GenericSMBusMux",
+            "address": "0xEB",
             "name": "HSBP $index Drive Mux",
-            "address": "0xEB"
+            "type": "GenericSMBusMux"
         },
         {
-            "type": "IntelHsbpFruDevice",
-            "name": "HSBP $index FRU"
+            "name": "HSBP $index FRU",
+            "type": "IntelHsbpFruDevice"
         },
         {
-            "type": "IntelHsbpTempSensor",
-            "name": "HSBP $index Temperature"
+            "name": "HSBP $index Temperature",
+            "type": "IntelHsbpTempSensor"
         }
     ],
-    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME':'F1U8X25S3PHSBP'\")",
-    "name": "1U_HSBP"
+    "name": "1U_HSBP",
+    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME':'F1U8X25S3PHSBP'\")"
 }

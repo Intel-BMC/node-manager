@@ -1,41 +1,41 @@
 {
-    "name": "R2000 Chassis (LACC Enabled)",
-   // "probe": "\"Intel Front Panel\" PRESENT AND 2U_HSBP PRESENT AND LACC in ",
-    "probe": "False",
-    "exposes": [{
+    "exposes": [
+        {
+            "bind": "1U System Fan connector 1",
             "name": "Fan 1",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 1"
+            "type": "IntelFan"
         },
         {
+            "bind": "1U System Fan connector 2",
             "name": "Fan 2",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 2"
+            "type": "IntelFan"
         },
         {
+            "bind": "1U System Fan connector 3",
             "name": "Fan 3",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 3"
+            "type": "IntelFan"
         },
         {
+            "bind": "1U System Fan connector 4",
             "name": "Fan 4",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 4"
+            "type": "IntelFan"
         },
         {
+            "bind": "1U System Fan connector 5",
             "name": "Fan 5",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 5"
+            "type": "IntelFan"
         },
         {
+            "bind": "1U System Fan connector 6",
             "name": "Fan 6",
-            "type": "IntelFan",
-            "bind": "1U System Fan connector 6"
+            "type": "IntelFan"
         },
         {
+            "bind": "CPU 1 Fan Connector",
             "name": "Water cooling pump",
-            "type": "IntelWaterPump",
-            "bind": "CPU 1 Fan Connector"
+            "type": "IntelWaterPump"
         }
-    ]
+    ],
+    "name": "R2000 Chassis (LACC Enabled)",
+    "probe": "False"
 }

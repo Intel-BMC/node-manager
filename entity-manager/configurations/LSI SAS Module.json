@@ -2,16 +2,16 @@
     "exposes": [
         {
             "bus": "{component bus number}",
-            "type": "IntelFruDevice",
-            "name": "LSI SAS Module FRU"
+            "name": "LSI SAS Module FRU",
+            "type": "IntelFruDevice"
         },
         {
+            "address": "0x98",
             "bus": "{component bus number}",
-            "type": "LM75",
             "name": "LSI SAS Module Temperature",
-            "address": "0x98"
+            "type": "LM75"
         }
     ],
-    "probe": "False",
-    "name": "LSI SAS Module"
+    "name": "LSI SAS Module",
+    "probe": "False"
 }
