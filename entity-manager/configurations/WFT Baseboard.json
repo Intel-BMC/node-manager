@@ -232,8 +232,7 @@
                     }
                 ]
             ],
-            "type": "TMP75",
-            "update": "Left Rear Temp"
+            "type": "TMP75"
         },
         {
             "index": 4,
@@ -854,5 +853,5 @@
         }
     ],
     "name": "WFP Baseboard",
-    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': '.*WFT'\")"
+    "probe": "fru.probe({'BOARD_PRODUCT_NAME': '.*WFT'})"
 }

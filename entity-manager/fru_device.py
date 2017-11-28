@@ -32,13 +32,14 @@ class FruDeviceProbe(object):
         except IOError:
             warnings.warn('Cannot find baseboard FRU.')
 
-    def probe(self, match_str, fru_address='any'):
-        match = re.compile(match_str)
-        found = []
-        for child in self.children:
-            m = match.findall(str(child['formatted']))
-            if m:
-                found.append(child)
+    def probe(self, match_dict, fru_address='any'):
+        found = self.children[:]
+        for key, value in match_dict.iteritems():
+            match = re.compile(value)
+            for child in found[:]:
+                m = match.search(child['formatted'].get(key, ""))
+                if not m:
+                    found.remove(child)
         if fru_address != 'any':
             for f in found[::]:
                 if f['device'] != fru_address:

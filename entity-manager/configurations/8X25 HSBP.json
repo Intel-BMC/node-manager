@@ -15,5 +15,5 @@
         }
     ],
     "name": "1U_HSBP",
-    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME':'F1U8X25S3PHSBP'\")"
+    "probe": "fru.probe({'BOARD_PRODUCT_NAME':'F1U8X25S3PHSBP'})"
 }

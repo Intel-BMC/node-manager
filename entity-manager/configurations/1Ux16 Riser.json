@@ -43,7 +43,7 @@
             }
         ],
         "name": "1Ux16 Riser 1",
-        "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\", fru_address=0x50)"
+        "probe": "fru.probe({'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'}, fru_address=0x50)"
     },
     {
         "exposes": [
@@ -89,6 +89,6 @@
             }
         ],
         "name": "1Ux16 Riser 2",
-        "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\", fru_address=0x51)"
+        "probe": "fru.probe({'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'}, fru_address=0x51)"
     }
 ]

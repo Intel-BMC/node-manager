@@ -43,7 +43,7 @@
             }
         ],
         "name": "2U12x35 Riser1",
-        "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'\", fru_address=0x50)"
+        "probe": "fru.probe({'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'}, fru_address=0x50)"
     },
     {
         "exposes": [
@@ -89,6 +89,6 @@
             }
         ],
         "name": "2U12x35 Riser2",
-        "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'\", fru_address=0x51)"
+        "probe": "fru.probe({'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'}, fru_address=0x51)"
     }
 ]

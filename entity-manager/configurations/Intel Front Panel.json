@@ -42,5 +42,5 @@
         }
     ],
     "name": "Intel Front Panel",
-    "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': 'FFPANEL'\") + fru.probe(\"'BOARD_PRODUCT_NAME': 'F2USTOPANEL'\")"
+    "probe": "fru.probe({'BOARD_PRODUCT_NAME': 'FFPANEL'}) + fru.probe({'BOARD_PRODUCT_NAME': 'F2USTOPANEL'})"
 }

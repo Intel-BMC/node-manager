@@ -212,5 +212,5 @@
         }
     ],
     "name": "R1000 Chassis",
-    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'\")"
+    "probe": "'WFP Baseboard' in found_devices and fru.probe({'BOARD_PRODUCT_NAME': 'F1UL16RISER\\d'})"
 }

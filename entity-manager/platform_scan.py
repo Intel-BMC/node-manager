@@ -9,14 +9,20 @@ import traceback
 from utils.generic import prep_json, dict_template_replace
 
 TEMPLATE_CHAR = '$'
-CONFIGURATION_DIR = os.environ.get('JSON_STORE', '/var/configuration/')
+MY_DIR = os.path.dirname(os.path.realpath(__file__))
+OUTPUT_DIR = os.path.join(
+    MY_DIR, 'out') if os.environ.get(
+        'TEST', '') else '/var/configuration/'
+CONFIGURATION_DIR = os.path.join(
+    MY_DIR, 'configurations') if os.environ.get(
+        'TEST', '') else '/usr/share/configurations'
 
 
 class PlatformScan(object):
     def __init__(self):
         self.fru = None
         self.found_devices = []
-        self.configuration_dir = os.environ.get('CONFIGURATION_DIR', '/usr/share/configurations')
+        self.configuration_dir = CONFIGURATION_DIR
 
     def parse_fru(self):
         self.fru = FruDeviceProbe()
@@ -51,39 +57,65 @@ class PlatformScan(object):
                 if child['name'] == item[bind]:
                     bind_name = bind.split('_')[1]
                     item[bind_name] = child
-                    item['status'] = item[bind_name]['status'] = 'okay'  # todo, should this go here?
-                    return True
+                    # todo, should this go here?
+                    item['status'] = item[bind_name]['status'] = 'okay'
+                    return item
 
     def read_config(self):
         try:
-            with open(os.path.join(CONFIGURATION_DIR, 'system.json')) as config:
+            with open(os.path.join(OUTPUT_DIR, 'system.json')) as config:
                 self.found_devices = json.load(config)
         except IOError:
             return False
         return self.found_devices
 
     def write_config(self):
-        if not os.path.exists(os.path.dirname(CONFIGURATION_DIR)):
-            os.makedirs(os.path.dirname(CONFIGURATION_DIR))
-        with open(os.path.join(CONFIGURATION_DIR, 'system.json'), 'w') as config:
-            json.dump(self.found_devices, config, indent=4)
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+        with open(os.path.join(OUTPUT_DIR, 'system.json'), 'w+') as config:
+            json.dump(
+                self.found_devices,
+                config,
+                indent=4,
+                separators=(
+                    ',',
+                    ': '),
+                sort_keys=True)
         sensors = []
         for _, value in self.found_devices.iteritems():
             if isinstance(value, dict) and value.get('exposes', None):
                 sensors += value['exposes']
-        with open(os.path.join(CONFIGURATION_DIR, 'sensors.json'), 'w') as sensor_config:
-            json.dump(sensors, sensor_config, indent=4)
+        with open(os.path.join(OUTPUT_DIR, 'sensors.json'), 'w+') as sensor_config:
+            json.dump(
+                sensors,
+                sensor_config,
+                indent=4,
+                separators=(
+                    ',',
+                    ': '),
+                sort_keys=True)
 
         # todo make this a dbus endpoint in the fru_device
-        with open(os.path.join(CONFIGURATION_DIR, 'frus.json'), 'w') as fru_config:
-            json.dump(self.fru.get_all(), fru_config, indent=4)
+        with open(os.path.join(OUTPUT_DIR, 'frus.json'), 'w+') as fru_config:
+            json.dump(
+                self.fru.get_all(),
+                fru_config,
+                indent=4,
+                separators=(
+                    ',',
+                    ': '),
+                sort_keys=True)
 
     def parse_configuration(self):
 
         available_entity_list = []
         self.found_devices = {}
 
-        for json_filename in glob.glob(os.path.join(self.configuration_dir, "*.json")):
+        # grab all json files and find all entities
+        for json_filename in glob.glob(
+            os.path.join(
+                self.configuration_dir,
+                "*.json")):
             with open(os.path.join(self.configuration_dir, json_filename)) as json_file:
                 clean_file = prep_json(json_file)
                 try:
@@ -94,7 +126,12 @@ class PlatformScan(object):
                         available_entity_list.append(entities)
                 except ValueError as e:
                     traceback.format_exc(e)
-                    print("Failed to parse {} error was {}".format(json_file, e))
+                    print(
+                        "Failed to parse {} error was {}".format(
+                            json_file, e))
+
+        # keep looping until the number of devices didn't change (no new probes
+        # passed)
         while True:
             num_devices = len(self.found_devices)
             for entity in available_entity_list[:]:
@@ -104,45 +141,50 @@ class PlatformScan(object):
                     print "entity {} doesn't have a probe function".format(entity.get("name", "unknown"))
                     if not entity.get("name", False):
                         print json.dumps(entity, sort_keys=True, indent=4)
+
+                # loop through all keys that haven't been found
                 elif entity['name'] not in (key for key in list(self.found_devices)):
-                    found_dev = eval(probe_command, {'fru': self.fru, 'found_devices': list(self.found_devices)})
-                    # TODO(ed)  Calling eval on a string is bad practice.  Come up with a better
+                    found_devs = eval(
+                        probe_command, {
+                            'fru': self.fru, 'found_devices': list(
+                                self.found_devices)})
+                    # TODO Calling eval on a string is bad practice.  Come up with a better
                     # probing structure
-                    if found_dev:
-                        try:
-                            count = len(found_dev)
-                        except TypeError:
-                            count = 1
+                    if not found_devs:
+                        continue
 
-                        entity['type'] = 'entity'
-                        entity['status'] = 'okay'
+                    entity['type'] = 'entity'
+                    entity['status'] = 'okay'
+                    exposes = entity.get('exposes', [])
 
-                        idx = 0
-                        for item in entity.get('exposes', [])[:]:
+                    if exposes:
+                        entity['exposes'] = []
+
+                    idx = 0
+                    for found_dev in found_devs:
+                        for item in exposes:
                             if self.find_bind(item):
-                                assert (self.apply_bind(item))
+                                item = self.apply_bind(item)
+                                assert item
+                                entity['exposes'].append(item)
                             elif self.has_update(item):
                                 assert (self.apply_update(item))
-                                entity['exposes'].remove(item)
-                                idx -= 1
                             else:
                                 if TEMPLATE_CHAR in str(item):
-                                    # todo populate this dict smarter
-                                    for ii in range(0, count):
-                                        replaced = dict_template_replace(item, {'bus': found_dev[0]['bus'],
-                                                                                'fruaddress': hex(found_dev[0]['device']),
-                                                                                'index': ii})
-                                        if 'status' not in replaced:
-                                            replaced['status'] = 'okay'
-                                        entity['exposes'][idx] = replaced
+                                    replaced = dict_template_replace(
+                                        item, {
+                                            'bus': found_dev['bus'], 'fruaddress': hex(
+                                                found_dev['device']), 'index': idx})
+                                    if 'status' not in replaced:
+                                        replaced['status'] = 'okay'
+                                    entity['exposes'].append(replaced)
                                 else:
                                     replaced = item
                                     if 'status' not in replaced:
                                         replaced['status'] = 'okay'
-                                    entity['exposes'][idx] = replaced
-
-                            self.found_devices[entity['name']] = entity
-                            idx += 1
+                                    entity['exposes'].append(replaced)
+                        idx += 1
+                    self.found_devices[entity['name']] = entity
 
             if len(self.found_devices) == num_devices:
                 break  # exit after looping without additions
@@ -159,9 +201,15 @@ if __name__ == '__main__':
 
     for pk, pvalue in found_devices.iteritems():
         for element in pvalue.get('exposes', []):
-            if not isinstance(element, dict) or element.get('status', 'disabled') != 'okay':
+            if not isinstance(
+                    element,
+                    dict) or element.get(
+                    'status',
+                    'disabled') != 'okay':
                 continue
-            element['oem_name'] = element.get('name', 'unknown').replace(' ', '_')
+            element['oem_name'] = element.get(
+                'name', 'unknown').replace(
+                ' ', '_')
             if element.get("type", "") == "TMP75":
                 element["reg"] = element.get("address").lower()
                 # todo(ed) find a better escape function to use.
