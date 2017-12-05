@@ -12,7 +12,7 @@ Configuration JSON is meant to be highly configurable, such that individual appl
 
 * "name" - Field used for identification and sorting.
 
- * "probe" - A probe is an action to determine if a configuration record should be applied. Probe can be set to “true” in the case where the record should always be applied, or set to more complex lookups, for instance a field in a FRU file. Probes may also be that another entity was added.
+* "probe" - A probe is an action to determine if a configuration record should be applied. Probe can be set to “true” in the case where the record should always be applied, or set to more complex lookups, for instance a field in a FRU file. Probes may also be that another entity was added.
 
 * "exposes" - Records that get applied when a probe passes, for instance a sensor.
 
@@ -24,47 +24,49 @@ Configuration JSON is meant to be highly configurable, such that individual appl
 
 Templates may also be used such as $bus and $index when using the fru device to automatically fill in device information.
 
+Required fields are name, probe and exposes.
+
 ## Configuration Records##
 
 Configuration records are composed of one or more entities that can define a hardware component. One configuration file can be used to describe an entire platform, or they can define a piece of removable hardware. Entities are added to the system configuration when a probe passes. Below is a simplified baseboard.
 
 ```
 {
-  "exposes": [
-    {
-        "status": "disabled",
-        "tachs": [
-            1,
-            2
+        "exposes": [
+            {
+                "name": "1U System Fan connector 1",
+                "pwm": 1,
+                "status": "disabled",
+                "tachs": [
+                    1,
+                    2
+                ],
+                "type": "IntelFanConnector"
+            },
+            {
+                "name": "2U System Fan connector 1",
+                "pwm": 1,
+                "status": "disabled",
+                "tachs": [
+                    1
+                ],
+                "type": "IntelFanConnector"
+            },
+            {
+                "address": "0x49",
+                "bus": 6,
+                "name": "Left Rear Temp",
+                "type": "TMP75"
+            },
+            {
+                "address": "0x48",
+                "bus": 6,
+                "name": "Voltage Regulator 1 Temp",
+                "type": "TMP75"
+            }
         ],
-        "pwm": 1,
-        "type": "IntelFanConnector",
-        "name": "1U System Fan connector 1"
-    },
-    {
-        "status": "disabled",
-        "tachs": [
-            1
-        ],
-        "pwm": 1,
-        "type": "IntelFanConnector",
-        "name": "2U System Fan connector 1"
-    },
-    {
-    "bus": 6,
-    "type": "TMP75",
-    "name": "Left Rear Temp",
-    "address": "0x49"
-    },
-    {
-    "bus": 6,
-    "type": "TMP75",
-    "name": "Voltage Regulator 1 Temp",
-    "address": "0x48"
-    }
-  ],
-  "name": "WFP Baseboard",
-  "probe": "fru.probe(\"'BOARD_PRODUCT_NAME': '.*WFT'\")"
+        "name": "WFP Baseboard",
+        "probe": "fru.probe('BOARD_PRODUCT_NAME': '.*WFT')"
 }
 ```
 
@@ -74,15 +76,15 @@ This baseboard entity describes two TMP75 sensors, and two fan connectors of dif
 
 ```
 {
-"exposes": [
-    {
-        "bind_connector": "1U System Fan connector 1",
-        "type": "AspeedFan",
-        "name": "Fan 1"
-    }
-      ]
-    "name": "R2000 Chassis",
-    "probe": "'WFP Baseboard' in found_devices and fru.probe(\"'BOARD_PRODUCT_NAME': 'A2UL16RISER\\d'\")"
+        "exposes": [
+            {
+                "bind_connector": "1U System Fan connector 1",
+                "name": "Fan 1",
+                "type": "AspeedFan"
+            }
+        ],
+        "name": "R2000 Chassis",
+        "probe": "'WFP Baseboard' in found_devices and fru.probe('BOARD_PRODUCT_NAME': 'A2UL16RISER\\d')"
 }
 ```
 
@@ -92,19 +94,19 @@ A separate probe could then expose the fans. As these use the bind keyword this 
 
 ```
 {
-    "status": "okay",
-    "name": "Fan 1",
-    "connector": {
+        "connector": {
+            "name": "1U System Fan connector 1",
+            "pwm": 1,
+            "status": "okay",
+            "tachs": [
+                1,
+                2
+            ],
+            "type": "IntelFanConnector"
+        },
+        "name": "Fan 1",
         "status": "okay",
-        "tachs": [
-            1,
-            2
-        ],
-        "pwm": 1,
-        "type": "IntelFanConnector",
-        "name": "1U System Fan connector 1"
-    },
-    "type": "AspeedFan"
+        "type": "AspeedFan"
 }
 ```
 

@@ -44,7 +44,12 @@ class FruDeviceProbe(object):
             for f in found[::]:
                 if f['device'] != fru_address:
                     found.remove(f)
-        return found
+        # return needed template fill parameters
+        return [self.template_resp(x) for x in found]
+
+    @staticmethod
+    def template_resp(fru):
+        return {'bus': fru['bus'], 'fruaddress': hex(fru['device'])}
 
     def get_all(self):
         return [x['formatted'] for x in self.children]

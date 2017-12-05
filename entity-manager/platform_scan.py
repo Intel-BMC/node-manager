@@ -21,7 +21,7 @@ CONFIGURATION_DIR = os.path.join(
 class PlatformScan(object):
     def __init__(self):
         self.fru = None
-        self.found_devices = []
+        self.found_entities = []
         self.configuration_dir = CONFIGURATION_DIR
 
     def parse_fru(self):
@@ -41,7 +41,7 @@ class PlatformScan(object):
     def apply_update(self, item):
         if 'update' not in list(item):
             return False
-        for _, entity in self.found_devices.iteritems():
+        for _, entity in self.found_entities.iteritems():
             for child in entity['exposes']:
                 if child['name'] == item['update']:
                     item.pop('update', None)
@@ -52,7 +52,7 @@ class PlatformScan(object):
         bind = self.find_bind(item)
         if not bind:
             return False
-        for _, entity in self.found_devices.iteritems():
+        for _, entity in self.found_entities.iteritems():
             for child in entity['exposes']:
                 if child['name'] == item[bind]:
                     bind_name = bind.split('_')[1]
@@ -64,17 +64,17 @@ class PlatformScan(object):
     def read_config(self):
         try:
             with open(os.path.join(OUTPUT_DIR, 'system.json')) as config:
-                self.found_devices = json.load(config)
+                self.found_entities = json.load(config)
         except IOError:
             return False
-        return self.found_devices
+        return self.found_entities
 
     def write_config(self):
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)
         with open(os.path.join(OUTPUT_DIR, 'system.json'), 'w+') as config:
             json.dump(
-                self.found_devices,
+                self.found_entities,
                 config,
                 indent=4,
                 separators=(
@@ -82,10 +82,11 @@ class PlatformScan(object):
                     ': '),
                 sort_keys=True)
         sensors = []
-        for _, value in self.found_devices.iteritems():
+        for _, value in self.found_entities.iteritems():
             if isinstance(value, dict) and value.get('exposes', None):
                 sensors += value['exposes']
-        with open(os.path.join(OUTPUT_DIR, 'sensors.json'), 'w+') as sensor_config:
+        # this is only for ease of parsing for apps that don't need to know the parents
+        with open(os.path.join(OUTPUT_DIR, 'flattened.json'), 'w+') as sensor_config:
             json.dump(
                 sensors,
                 sensor_config,
@@ -109,7 +110,7 @@ class PlatformScan(object):
     def parse_configuration(self):
 
         available_entity_list = []
-        self.found_devices = {}
+        self.found_entities = {}
 
         # grab all json files and find all entities
         for json_filename in glob.glob(
@@ -133,7 +134,7 @@ class PlatformScan(object):
         # keep looping until the number of devices didn't change (no new probes
         # passed)
         while True:
-            num_devices = len(self.found_devices)
+            num_devices = len(self.found_entities)
             for entity in available_entity_list[:]:
                 probe_command = entity.get("probe", None)
                 if not probe_command:
@@ -143,14 +144,14 @@ class PlatformScan(object):
                         print json.dumps(entity, sort_keys=True, indent=4)
 
                 # loop through all keys that haven't been found
-                elif entity['name'] not in (key for key in list(self.found_devices)):
-                    found_devs = eval(
+                elif entity['name'] not in (key for key in list(self.found_entities)):
+                    probe_devs = eval(
                         probe_command, {
                             'fru': self.fru, 'found_devices': list(
-                                self.found_devices)})
+                                self.found_entities)})
                     # TODO Calling eval on a string is bad practice.  Come up with a better
                     # probing structure
-                    if not found_devs:
+                    if not probe_devs:
                         continue
 
                     entity['type'] = 'entity'
@@ -161,7 +162,7 @@ class PlatformScan(object):
                         entity['exposes'] = []
 
                     idx = 0
-                    for found_dev in found_devs:
+                    for probe_dev in probe_devs:
                         for item in exposes:
                             if self.find_bind(item):
                                 item = self.apply_bind(item)
@@ -171,10 +172,9 @@ class PlatformScan(object):
                                 assert (self.apply_update(item))
                             else:
                                 if TEMPLATE_CHAR in str(item):
+                                    probe_dev['index'] = idx
                                     replaced = dict_template_replace(
-                                        item, {
-                                            'bus': found_dev['bus'], 'fruaddress': hex(
-                                                found_dev['device']), 'index': idx})
+                                        item, probe_dev)
                                     if 'status' not in replaced:
                                         replaced['status'] = 'okay'
                                     entity['exposes'].append(replaced)
@@ -184,12 +184,12 @@ class PlatformScan(object):
                                         replaced['status'] = 'okay'
                                     entity['exposes'].append(replaced)
                         idx += 1
-                    self.found_devices[entity['name']] = entity
+                    self.found_entities[entity['name']] = entity
 
-            if len(self.found_devices) == num_devices:
+            if len(self.found_entities) == num_devices:
                 break  # exit after looping without additions
         self.write_config()
-        return self.found_devices
+        return self.found_entities
 
 
 if __name__ == '__main__':
@@ -210,9 +210,9 @@ if __name__ == '__main__':
             element['oem_name'] = element.get(
                 'name', 'unknown').replace(
                 ' ', '_')
+
             if element.get("type", "") == "TMP75":
                 element["reg"] = element.get("address").lower()
-                # todo(ed) find a better escape function to use.
                 overlay_gen.load_entity(**element)
 
             elif element.get("type", "") == "TMP421":
