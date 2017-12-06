@@ -3,7 +3,7 @@
 / {
     compatible = "$platform";
     fragment@0{
-        target = <&pwmtacho>;
+        target = <&pwm_tacho>;
         __overlay__{
             #address-cells = <1>;
             #size-cells = <0>;
