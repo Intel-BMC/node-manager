@@ -1,122 +1,204 @@
 #Entity Manager#
 
-Entity manager is a runtime configuration application that based on system components generates a system JSON description. This JSON system configuration can then be parsed by applications for initialization data. It also can, based on the configuration, attempt to load device tree overlays to add sensors to the device tree.
+Entity manager is a runtime configuration application which parses configuration
+files (in JSON format) and attempts to detect the devices described by the
+configuration files. It also can, based on the configuration, attempt to load
+device tree overlays to add sensors to the device tree. The output is also a
+JSON file which includes all devices in the system such as fans and temperature
+sensors.
 
 ## Configuration Syntax ##
 
-Configuration JSON is meant to be highly configurable, such that individual applications can define specialized fields per the application need. The JSON is described in entities that describe pieces of hardware. In general it is preferred to define files as the smallest components that are available, as it makes platform ports less costly. However this is at the vendors discretion and a single file configuration is legal.
+In most cases a server system is built with multiple hardware modules (circuit
+boards) such as baseboard, risers, and hot-swap backplanes. While it is
+perfectly legal to combine the JSON configuration information for all the
+hardware modules into a single file if desired, it is also possible to divide
+them into multilple configuration files. For example, there may be a baseboard
+JSON file (describes all devices on the baseboard) and a chassis JSON file
+(describes devices attached to the chassis). When one of the hardware modules
+needs to be upgraded (e.g., a new temperature sensor), only such JSON
+configuration file needs to be be updated.
 
-*Clarification point: FRU in this file refers to the actual EEPROM file contents, not a piece of hardware.*
+Within a configuration file, there is a JSON object which consists of
+multiple "string : value" pairs. This Entity Manager defines the following
+strings.
 
-### Keywords ###
+| String    | Example Value                            | Description                              |
+| :-------- | ---------------------------------------- | ---------------------------------------- |
+| "name"    | "X1000 1U Chassis"                       | Human readable name used for identification and sorting. |
+| "probe"   | "fru.probe({'BOARD_PRODUCT_NAME':'FFPANEL'})" | Statement which attempts to read from the hardware. The result determines if a configuration record should be applied. The value for probe can be set to “true” in the case the record should always be applied, or set to more complex lookups, for instance a field in a FRU file. |
+| "exposes" | [{"name" : "CPU fan"}, ...]              | An array of JSON objects which are valid if the probe result is successful. These objects describe the devices BMC can interact. |
+| "status"  | "disabled"                               | An indicator that allows for some records to be disabled by default. |
+| "bind_*"  | "2U System Fan connector 1"              | The record isn't complete and needs to be combined with another to be functional. The value is a unique reference to a record elsewhere. |
 
-* "name" - Field used for identification and sorting.
+Template strings in the form of "$identifier" may be used in configuration
+files. The following table describes the template strings currently defined.
 
-* "probe" - A probe is an action to determine if a configuration record should be applied. Probe can be set to “true” in the case where the record should always be applied, or set to more complex lookups, for instance a field in a FRU file. Probes may also be that another entity was added.
+| Template String | Description                              |
+| :-------------- | :--------------------------------------- |
+| "$bus"          | During a I2C bus scan and when the "probe" command is successful, this template string is substituted with the bus number to which the device is connected. |
+| "$fruaddress"   | When the "probe" is successful, this template string is substituted with the (7-bit) I2C address of the FRU device. |
+| "$index"        | A run-tim enumeration. This template string is substituted with a unique index value when the "probe" command is successful. This allows multiple identical devices (e.g., HSBPs) to exist in a system but each with a unique name. |
 
-* "exposes" - Records that get applied when a probe passes, for instance a sensor.
 
-* "status" - An indicator that allows for some records to be disabled by default. This can be useful if one entity "updates" another.
 
-* "update" - A reference to another field to update its contents with the data in this record using a dictionary style update.
-
-* "bind_*" - A reference to attach this record to another record, using the name following the underscore.
-
-Templates may also be used such as $bus and $index when using the fru device to automatically fill in device information.
+## Configuration Records - Baseboard Example##
 
 Required fields are name, probe and exposes.
 
-## Configuration Records##
-
-Configuration records are composed of one or more entities that can define a hardware component. One configuration file can be used to describe an entire platform, or they can define a piece of removable hardware. Entities are added to the system configuration when a probe passes. Below is a simplified baseboard.
-
-```
-{
-        "exposes": [
-            {
-                "name": "1U System Fan connector 1",
-                "pwm": 1,
-                "status": "disabled",
-                "tachs": [
-                    1,
-                    2
-                ],
-                "type": "IntelFanConnector"
-            },
-            {
-                "name": "2U System Fan connector 1",
-                "pwm": 1,
-                "status": "disabled",
-                "tachs": [
-                    1
-                ],
-                "type": "IntelFanConnector"
-            },
-            {
-                "address": "0x49",
-                "bus": 6,
-                "name": "Left Rear Temp",
-                "type": "TMP75"
-            },
-            {
-                "address": "0x48",
-                "bus": 6,
-                "name": "Voltage Regulator 1 Temp",
-                "type": "TMP75"
-            }
-        ],
-        "name": "WFP Baseboard",
-        "probe": "fru.probe('BOARD_PRODUCT_NAME': '.*WFT')"
-}
-```
-
-####Example Baseboard ####
-
-This baseboard entity describes two TMP75 sensors, and two fan connectors of different types. When a FRU is found with the appropriate product name, this record is added to the system JSON.
+The configuration JSON files attempt to model after actual hardware modules
+which made up a complete system. An example baseboard JSON file shown below
+defines two fan connectors and two temperature sensors of TMP75 type. These
+objects are considered valid by BMC when the probe command (reads and
+compares the product name in FRU) is successful and this baseboard is named
+as "WFP baseboard".
 
 ```
 {
-        "exposes": [
-            {
-                "bind_connector": "1U System Fan connector 1",
-                "name": "Fan 1",
-                "type": "AspeedFan"
-            }
-        ],
-        "name": "R1000 Chassis",
-        "probe": "'WFP Baseboard' in found_devices
-                    and fru.probe('BOARD_PRODUCT_NAME': 'F1UL16RISER\\d')"
-}
-```
-
-####Example Fans####
-
-A separate probe could then expose the fans. As these use the bind keyword this would get inserted into the fan connector record, so that the system JSON would show the following:
-
-```
-{
-        "connector": {
+    "exposes": [
+        {
             "name": "1U System Fan connector 1",
             "pwm": 1,
-            "status": "okay",
+            "status": "disabled",
             "tachs": [
                 1,
                 2
             ],
             "type": "IntelFanConnector"
         },
-        "name": "Fan 1",
-        "status": "okay",
-        "type": "AspeedFan"
+        {
+            "name": "2U System Fan connector 1",
+            "pwm": 1,
+            "status": "disabled",
+            "tachs": [
+                1
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "address": "0x49",
+            "bus": 6,
+            "name": "Left Rear Temp",
+            "thresholds": [
+                [
+                    {
+                        "direction": "greater than",
+                        "name": "upper critical",
+                        "severity": 1,
+                        "value": 115
+                    },
+                    {
+                        "direction": "greater than",
+                        "name": "upper non critical",
+                        "severity": 0,
+                        "value": 110
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower non critical",
+                        "severity": 0,
+                        "value": 5
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower critical",
+                        "severity": 1,
+                        "value": 0
+                    }
+                ]
+            ],
+            "type": "TMP75"
+        },
+        {
+            "address": "0x48",
+            "bus": 6,
+            "name": "Voltage Regulator 1 Temp",
+            "thresholds": [
+                [
+                    {
+                        "direction": "greater than",
+                        "name": "upper critical",
+                        "severity": 1,
+                        "value": 115
+                    },
+                    {
+                        "direction": "greater than",
+                        "name": "upper non critical",
+                        "severity": 0,
+                        "value": 110
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower non critical",
+                        "severity": 0,
+                        "value": 5
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower critical",
+                        "severity": 1,
+                        "value": 0
+                    }
+                ]
+            ],
+            "type": "TMP75"
+        }
+    ],
+    "name": "WFP Baseboard",
+    "probe": "fru.probe({'BOARD_PRODUCT_NAME' : '.*WFT'})"
+}
+```
+
+####Configuration Records - Chassis Example ####
+
+Although fan connectors are considered a part of a baseboard, the physical
+fans themselves are considered as a part of a chassis. In order for a fan to
+be matched with a fan connector, the keyword "bind_connector" is used. The
+example below shows how a chassis fan named "Fan 1" is connected to the
+connector named "1U System Fan connector 1". When the probe command finds the
+correct product name in baseboard FRU, the fan and the connector are
+considered as being joined together.
+
+```
+{
+    "exposes": [
+        {
+            "bind_connector": "1U System Fan connector 1",
+            "name": "Fan 1",
+            "thresholds": [
+                [
+                    {
+                        "direction": "less than",
+                        "name": "lower critical",
+                        "severity": 1,
+                        "value": 1750
+                    },
+                    {
+                        "direction": "less than",
+                        "name": "lower non critical",
+                        "severity": 0,
+                        "value": 2000
+                    }
+                ]
+            ],
+            "type": "AspeedFan"
+        }
+    ]
 }
 ```
 
 ## Enabling Sensors ##
 
-As demons can trigger off of shared types, sometimes some handshaking will be needed to enable sensors. From Example 1, we can see the definition of a TMP75 sensor. When the entity is enabled, the device tree must be updated before scanning may begin. The device tree overlay generator has the ability to key off of different types and create device tree overlays for specific offsets. Once this is done, the baseboard temperature sensor demon can scan the sensors.
+As demons can trigger off of shared types, sometimes some handshaking will be
+needed to enable sensors. Using the TMP75 sensor as an example, when the
+sensor object is enabled, the device tree must be updated before scanning may
+begin. The device tree overlay generator has the ability to key off of
+different types and create device tree overlays for specific offsets. Once
+this is done, the baseboard temperature sensor demon can scan the sensors.
 
 ## Run Unit Tests ##
 
 The following environment variables need to be set to run unit tests:
 
-* TEST: 1, this disables the fru parser from scanning on init and changes the work directories.
+* TEST: 1, this disables the fru parser from scanning on init and changes the
+work directories.
