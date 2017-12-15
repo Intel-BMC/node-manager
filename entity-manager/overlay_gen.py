@@ -95,8 +95,8 @@ class ASPEED_PWMTACHO(Entity):
         self.probe_driver = r'/sys/bus/platform/drivers/aspeed_pwm_tacho'
 
         self.template_args = {'platform': PLATFORM,
-                              'tachs': ' '.join(['0x{:02x}'.format(ii - 1) for ii in kwargs.get('tachs')]),
-                              'reg': '0x{:02x}'.format(kwargs.get('pwm', '') - 1),
+                              'tachs': ' '.join(['0x{:02x}'.format(ii) for ii in kwargs.get('tachs')]),
+                              'reg': '0x{:02x}'.format(kwargs.get('pwm', '')),
                               'index': kwargs.get('pwm', ''),
                               'name': 'Tach{}'.format(kwargs.get('pwm', ''))}  # todo, fill in real name
 

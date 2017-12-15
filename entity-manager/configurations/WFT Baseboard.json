@@ -2,115 +2,115 @@
     "exposes": [
         {
             "name": "1U System Fan connector 1",
-            "pwm": 1,
+            "pwm": 0,
             "status": "disabled",
             "tachs": [
-                1,
-                2
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "1U System Fan connector 2",
-            "pwm": 2,
-            "status": "disabled",
-            "tachs": [
-                3,
-                4
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "1U System Fan connector 3",
-            "pwm": 3,
-            "status": "disabled",
-            "tachs": [
-                5,
-                6
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "1U System Fan connector 4",
-            "pwm": 4,
-            "status": "disabled",
-            "tachs": [
-                7,
-                8
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "1U System Fan connector 5",
-            "pwm": 5,
-            "status": "disabled",
-            "tachs": [
-                9,
-                10
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "1U System Fan connector 6",
-            "pwm": 6,
-            "status": "disabled",
-            "tachs": [
-                11,
-                12
-            ],
-            "type": "IntelFanConnector"
-        },
-        {
-            "name": "2U System Fan connector 1",
-            "pwm": 1,
-            "status": "disabled",
-            "tachs": [
+                0,
                 1
             ],
             "type": "IntelFanConnector"
         },
         {
-            "name": "2U System Fan connector 2",
-            "pwm": 2,
+            "name": "1U System Fan connector 2",
+            "pwm": 1,
             "status": "disabled",
             "tachs": [
+                2,
                 3
             ],
             "type": "IntelFanConnector"
         },
         {
-            "name": "2U System Fan connector 3",
-            "pwm": 3,
+            "name": "1U System Fan connector 3",
+            "pwm": 2,
             "status": "disabled",
             "tachs": [
+                4,
                 5
             ],
             "type": "IntelFanConnector"
         },
         {
-            "name": "2U System Fan connector 4",
-            "pwm": 4,
+            "name": "1U System Fan connector 4",
+            "pwm": 3,
             "status": "disabled",
             "tachs": [
+                6,
                 7
             ],
             "type": "IntelFanConnector"
         },
         {
-            "name": "2U System Fan connector 5",
-            "pwm": 5,
+            "name": "1U System Fan connector 5",
+            "pwm": 4,
             "status": "disabled",
             "tachs": [
+                8,
                 9
             ],
             "type": "IntelFanConnector"
         },
         {
-            "name": "2U System Fan connector 6",
-            "pwm": 6,
+            "name": "1U System Fan connector 6",
+            "pwm": 5,
             "status": "disabled",
             "tachs": [
+                10,
                 11
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 1",
+            "pwm": 0,
+            "status": "disabled",
+            "tachs": [
+                0
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 2",
+            "pwm": 1,
+            "status": "disabled",
+            "tachs": [
+                2
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 3",
+            "pwm": 2,
+            "status": "disabled",
+            "tachs": [
+                4
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 4",
+            "pwm": 3,
+            "status": "disabled",
+            "tachs": [
+                6
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 5",
+            "pwm": 4,
+            "status": "disabled",
+            "tachs": [
+                8
+            ],
+            "type": "IntelFanConnector"
+        },
+        {
+            "name": "2U System Fan connector 6",
+            "pwm": 5,
+            "status": "disabled",
+            "tachs": [
+                10
             ],
             "type": "IntelFanConnector"
         },
