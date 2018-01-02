@@ -1,6 +1,6 @@
 import unittest2 as unittest
-from .. import platform_scan
-from .. import fru_device
+import platform_scan
+import fru_device
 import os
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))

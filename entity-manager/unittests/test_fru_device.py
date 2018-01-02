@@ -1,6 +1,6 @@
 import unittest2 as unittest
 import os
-from .. import fru_device
+import fru_device
 
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))

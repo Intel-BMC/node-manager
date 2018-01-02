@@ -83,8 +83,9 @@ This baseboard entity describes two TMP75 sensors, and two fan connectors of dif
                 "type": "AspeedFan"
             }
         ],
-        "name": "R2000 Chassis",
-        "probe": "'WFP Baseboard' in found_devices and fru.probe('BOARD_PRODUCT_NAME': 'A2UL16RISER\\d')"
+        "name": "R1000 Chassis",
+        "probe": "'WFP Baseboard' in found_devices
+                    and fru.probe('BOARD_PRODUCT_NAME': 'F1UL16RISER\\d')"
 }
 ```
 
