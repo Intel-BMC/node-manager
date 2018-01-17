@@ -9,7 +9,7 @@
             #size-cells = <0>;
             status = "okay";
             eeprom@$name {
-                compatible = "atmel,24c256";
+                compatible = "atmel,24c02";
                 reg = <$reg>;
                 oemname1 = "$name";
                 pagesize = <64>;
