@@ -6,7 +6,9 @@ import glob
 import subprocess
 import StringIO
 import shutil
+import json
 
+CONFIGURATION_DIR = '/var/configuration/'
 TEMPLATE_DIR = '/usr/share/overlay_templates'
 PLATFORM = 'aspeed,ast2500'
 OUTPUT_DIR = '/tmp/overlays'
@@ -41,7 +43,7 @@ class Entity(object):
         if not hasattr(self, 'probe_driver'):
             return
         for device in glob.glob(os.path.join(self.probe_driver, '*')):
-            if os.path.islink(device):    # devices are symlinks
+            if os.path.islink(device):  # devices are symlinks
                 with open(os.path.join(self.probe_driver, 'unbind'), 'w') as unbind:
                     unbind.write(os.path.basename(device))
                 with open(os.path.join(self.probe_driver, 'bind'), 'w') as bind:
@@ -145,14 +147,44 @@ if __name__ == '__main__':
     if '-d' in sys.argv:
         unload_overlays()
     else:
-        if len(sys.argv) < 3:
-            raise Exception('Must supply kwargs, -d or -l')
-        try:
-            keys = [x.split('=')[0] for x in sys.argv[1:]]
-            values = [x.split('=')[1] for x in sys.argv[1:]]
-        except IndexError:
-            raise Exception('Bad input format')
+        unload_overlays()
+        configurations = json.load(open(os.path.join(CONFIGURATION_DIR, 'system.json')))
+        for _, configuration in configurations.iteritems():
+            for element in configuration.get('exposes', []):
+                if not isinstance(
+                        element,
+                        dict) or element.get(
+                    'status',
+                    'disabled') != 'okay':
+                    continue
+                element['oem_name'] = element.get(
+                    'name', 'unknown').replace(
+                    ' ', '_')
 
-        kwargs = dict(zip(keys, values))
-        load_entity(**kwargs)
+                # todo, this should really just be a map or deleted
+                if element.get("type", "") == "TMP75":
+                    element["reg"] = element.get("address").lower()
+                    load_entity(**element)
 
+                elif element.get("type", "") == "TMP421":
+                    element["reg"] = element.get("address").lower()
+                    element["oem_name1"] = element.get("name1").replace(" ", "_")
+                    load_entity(**element)
+
+                elif element.get("type", "") == "ADC":
+                    load_entity(**element)
+
+                elif element.get("type", "") == "AspeedFan":
+                    connector = element['connector']
+                    element.update(connector)
+                    element["type"] = 'aspeed_pwmtacho'
+                    load_entity(**element)
+
+                elif element.get("type", "") == "SkylakeCPU":
+                    element["type"] = 'aspeed_peci_hwmon'
+                    load_entity(**element)
+
+                elif element.get("type", "") == "IntelFruDevice":
+                    element["type"] = 'eeprom'
+                    element["reg"] = element.get("address").lower()
+                    load_entity(**element)
