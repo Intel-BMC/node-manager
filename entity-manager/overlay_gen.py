@@ -90,6 +90,13 @@ class EEPROM(Entity):
                               'reg': kwargs.get('reg'),
                               'name': kwargs.get('oem_name', '')}
 
+class PMBUS(Entity):
+    def __init__(self, **kwargs):
+        self.name = 'pmbus'
+        self.template_args = {'platform': PLATFORM,
+                              'bus': kwargs.get('bus'),
+                              'reg': kwargs.get('reg'),
+                              'name': kwargs.get('oem_name', '')}
 
 class ADC(Entity):
 
@@ -205,5 +212,9 @@ if __name__ == '__main__':
 
                 elif element.get("type", "") == "IntelFruDevice":
                     element["type"] = 'eeprom'
+                    element["reg"] = element.get("address").lower()
+                    load_entity(**element)
+
+                elif element.get("type", "") == "pmbus":
                     element["reg"] = element.get("address").lower()
                     load_entity(**element)

@@ -237,3 +237,7 @@ if __name__ == '__main__':
                 element["type"] = 'eeprom'
                 element["reg"] = element.get("address").lower()
                 overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "pmbus":
+                element["reg"] = element.get("address").lower()
+                overlay_gen.load_entity(**element)

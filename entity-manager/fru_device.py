@@ -12,7 +12,7 @@ import datetime
 INTEL_EPOCH = datetime.datetime(year=1996, month=1, day=1)
 
 BASEBOARD_FRU = r'/etc/fru/baseboard.fru.bin'
-TIMEOUT = 2.0
+TIMEOUT = 6.0
 
 
 class FruDeviceProbe(object):

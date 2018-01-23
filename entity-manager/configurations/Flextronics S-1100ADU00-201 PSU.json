@@ -1,0 +1,18 @@
+{
+    "exposes": [
+        {
+            "address": "0x58",
+            "bus": "$bus",
+            "name": "Flextronics S-1100ADU00-201 PSU Device",
+            "type": "pmbus"
+        },
+        {
+            "address": "$fruaddress",
+            "bus": "$bus",
+            "name": "Flextronics S-1100ADU00-201 PSU FRU",
+            "type": "IntelFruDevice"
+        }
+    ],
+    "name": "Flextronics S-1100ADU00-201 PSU",
+    "probe": "fru.probe({'PRODUCT_PRODUCT_NAME': 'S-1100ADU00-201'}, fru_address=0x50)"
+}
