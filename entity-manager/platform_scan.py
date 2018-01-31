@@ -241,3 +241,8 @@ if __name__ == '__main__':
             elif element.get("type", "") == "pmbus":
                 element["reg"] = element.get("address").lower()
                 overlay_gen.load_entity(**element)
+
+            elif element.get("type", "") == "SMBusMux":
+                element["type"] = 'smbus_mux'
+                element["reg"] = element.get("address").lower()
+                overlay_gen.load_entity(**element)

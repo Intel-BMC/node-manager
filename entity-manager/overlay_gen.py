@@ -98,6 +98,14 @@ class PMBUS(Entity):
                               'reg': kwargs.get('reg'),
                               'name': kwargs.get('oem_name', '')}
 
+class SMBUS_MUX(Entity):
+    def __init__(self, **kwargs):
+        self.name = 'smbus_mux'
+        self.template_args = {'platform': PLATFORM,
+                              'bus': kwargs.get('bus'),
+                              'reg': kwargs.get('reg'),
+                              'name': kwargs.get('oem_name', '')}
+
 class ADC(Entity):
 
     def __init__(self, **kwargs):
@@ -216,5 +224,10 @@ if __name__ == '__main__':
                     load_entity(**element)
 
                 elif element.get("type", "") == "pmbus":
+                    element["reg"] = element.get("address").lower()
+                    load_entity(**element)
+
+                elif element.get("type", "") == "SMBusMux":
+                    element["type"] = 'smbus_mux'
                     element["reg"] = element.get("address").lower()
                     load_entity(**element)

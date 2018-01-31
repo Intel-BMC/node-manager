@@ -3,7 +3,7 @@
         {
             "address": "0xEB",
             "name": "HSBP $index Drive Mux",
-            "type": "GenericSMBusMux"
+            "type": "SMBusMux"
         },
         {
             "name": "HSBP $index FRU",

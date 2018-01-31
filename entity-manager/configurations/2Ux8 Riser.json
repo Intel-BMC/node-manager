@@ -2,6 +2,12 @@
     {
         "exposes": [
             {
+                "address": "0x72",
+                "bus": "$bus",
+                "name": "Riser 1 Drive Mux",
+                "type": "SMBusMux"
+            },
+            {
                 "address": "0x48",
                 "bus": "$bus",
                 "name": "Riser 1 Temp",
@@ -47,6 +53,12 @@
     },
     {
         "exposes": [
+            {
+                "address": "0x73",
+                "bus": "$bus",
+                "name": "Riser 2 Drive Mux",
+                "type": "SMBusMux"
+            },
             {
                 "address": "0x49",
                 "bus": "$bus",
