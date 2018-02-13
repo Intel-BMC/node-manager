@@ -8,8 +8,10 @@
             #address-cells = <1>;
             #size-cells = <0>;
             status = "okay";
-            smbus_mux@$name {
+            i2cswitch@$name {
                 compatible = "nxp,pca9545";
+                #address-cells = <1>;
+                #size-cells = <0>;
                 reg = <$reg>;
                 oemname1 = "$name";
             };
