@@ -7,7 +7,7 @@ import glob
 HWMON_PATH = '/sys/class/hwmon'
 
 # these are only whitelisted until a user space application has been written
-TEMP_SENSOR_WHITELIST = ['peci-hwmon-cpu0', 'peci-hwmon-cpu1']
+TEMP_SENSOR_WHITELIST = ['peci-hwmon']
 
 
 class HwmonTempSensor:
