@@ -98,6 +98,8 @@ class RootObject(dbus.service.Object):
     def GetManagedObjects(self):
         managed_object = {}
         for sensor in self.sensors:
+            if sensor.value is None:
+                continue
             for key, val in sensor.GetManagedObjects().iteritems():
                 managed_object[key] = val
         return managed_object
