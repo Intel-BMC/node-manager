@@ -8,6 +8,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 include(GNUInstallDirs)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inc)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Control/Power")
 set(DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Control.Power")
@@ -18,6 +19,11 @@ set(SRC_FILES
     src/PowerControl.cpp
     src/timer.cpp
     src/main.cpp
+)
+
+set(GENERATED_SRC_FILES
+    ${DBUS_OBJECT_NAME}/error.cpp
+    ${DBUS_OBJECT_NAME}/server.cpp
 )
 
 # import libsystemd
@@ -57,7 +63,33 @@ if(ENABLE_GTEST)
     add_test(NAME timertest COMMAND timertest)
 endif()
 
-add_executable(${PROJECT_NAME} ${SRC_FILES})
+add_custom_command(
+    OUTPUT ${DBUS_OBJECT_NAME}/error.hpp
+    OUTPUT ${DBUS_OBJECT_NAME}/error.cpp
+    COMMAND mkdir -p ${DBUS_OBJECT_NAME}
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} error exception-header ${DBUS_INTF_NAME} > ${DBUS_OBJECT_NAME}/error.hpp
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} error exception-cpp ${DBUS_INTF_NAME} > ${DBUS_OBJECT_NAME}/error.cpp
+    DEPENDS ${DBUS_OBJECT_NAME}.errors.yaml
+)
+set_source_files_properties(
+    ${DBUS_OBJECT_NAME}/error.hpp
+    ${DBUS_OBJECT_NAME}/error.cpp
+    PROPERTIES GENERATED TRUE)
+
+add_custom_command(
+    OUTPUT ${DBUS_OBJECT_NAME}/server.hpp
+    OUTPUT ${DBUS_OBJECT_NAME}/server.cpp
+    COMMAND mkdir -p ${DBUS_OBJECT_NAME}
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} interface server-header ${DBUS_INTF_NAME} > ${DBUS_OBJECT_NAME}/server.hpp
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} interface server-cpp ${DBUS_INTF_NAME} > ${DBUS_OBJECT_NAME}/server.cpp
+    DEPENDS ${DBUS_OBJECT_NAME}.interface.yaml
+)
+set_source_files_properties(
+    ${DBUS_OBJECT_NAME}/server.hpp
+    ${DBUS_OBJECT_NAME}/server.cpp
+    PROPERTIES GENERATED TRUE)
+
+add_executable(${PROJECT_NAME} ${SRC_FILES} ${GENERATED_SRC_FILES})
 target_link_libraries(${PROJECT_NAME} ${SYSTEMD_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${SDBUSPLUSPLUS_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${DBUSINTERFACE_LIBRARIES})
