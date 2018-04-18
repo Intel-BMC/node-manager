@@ -16,7 +16,6 @@
 #include <phosphor-logging/elog-errors.hpp>
 #include <phosphor-logging/elog.hpp>
 #include <phosphor-logging/log.hpp>
-#include <server.hpp>
 #include <xyz/openbmc_project/Common/error.hpp>
 #include <chrono>
 #include "ChassisControl.hpp"
