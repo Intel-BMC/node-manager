@@ -17,9 +17,9 @@ set(POWER_DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Buttons.Power")
 set(RESET_DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Buttons/Reset")
 set(RESET_DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Buttons.Reset")
 
-add_definitions(-DPOWER_DBUS_OBJECT_NAME="/${POWER_DBUS_OBJECT_NAME}")
+add_definitions(-DPOWER_DBUS_OBJECT_NAME="/${POWER_DBUS_OBJECT_NAME}0")
 
-add_definitions(-DRESET_DBUS_OBJECT_NAME="/${RESET_DBUS_OBJECT_NAME}")
+add_definitions(-DRESET_DBUS_OBJECT_NAME="/${RESET_DBUS_OBJECT_NAME}0")
 
 set(SRC_FILES
     src/PowerButton.cpp

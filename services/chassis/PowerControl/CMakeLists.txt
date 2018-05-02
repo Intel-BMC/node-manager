@@ -13,7 +13,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Control/Power")
 set(DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Control.Power")
 
-add_definitions(-DDBUS_OBJECT_NAME="/${DBUS_OBJECT_NAME}")
+add_definitions(-DDBUS_OBJECT_NAME="/${DBUS_OBJECT_NAME}0")
 add_definitions(-DDBUS_INTF_NAME="${DBUS_INTF_NAME}")
 set(SRC_FILES
     src/PowerControl.cpp
@@ -90,8 +90,8 @@ set_source_files_properties(
     PROPERTIES GENERATED TRUE)
 
 add_executable(${PROJECT_NAME} ${SRC_FILES} ${GENERATED_SRC_FILES})
-target_link_libraries(${PROJECT_NAME} ${SYSTEMD_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} ${SDBUSPLUSPLUS_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${SYSTEMD_LIBRARIES} gpio chassisi2c)
+target_link_libraries(${PROJECT_NAME} "${SDBUSPLUSPLUS_LIBRARIES} -lstdc++fs")
 target_link_libraries(${PROJECT_NAME} ${DBUSINTERFACE_LIBRARIES})
 
 install (TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})

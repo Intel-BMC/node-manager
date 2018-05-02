@@ -13,19 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <systemd/sd-event.h>
-#include <unistd.h>
-#include <phosphor-logging/elog-errors.hpp>
-#include <phosphor-logging/elog.hpp>
-#include <phosphor-logging/log.hpp>
-#include <xyz/openbmc_project/Common/error.hpp>
-#include <chrono>
-#include <experimental/filesystem>
-#include <fstream>
-#include <iostream>
 #include "PowerControl.hpp"
 
 int main(int argc, char* argv[]) {
