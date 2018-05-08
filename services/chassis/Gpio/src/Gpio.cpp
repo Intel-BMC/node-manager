@@ -1,13 +1,7 @@
 #include <experimental/filesystem>
 #include <fcntl.h>
 #include <fstream>
-#include <iostream>
 #include <phosphor-logging/elog-errors.hpp>
-#include <phosphor-logging/elog.hpp>
-#include <phosphor-logging/log.hpp>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <systemd/sd-event.h>
 #include <unistd.h>
 #include <xyz/openbmc_project/Common/error.hpp>
 #include "Gpio.hpp"
@@ -60,7 +54,9 @@ int configGpio(const char *gpioName, int *fd, sdbusplus::bus::bus &bus)
 
     if (std::experimental::filesystem::exists(fullPath))
     {
-        phosphor::logging::log<phosphor::logging::level::INFO>("GPIO exported");
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "GPIO exported",
+            phosphor::logging::entry("PATH=%s", devPath.c_str()));
     }
     else
     {
