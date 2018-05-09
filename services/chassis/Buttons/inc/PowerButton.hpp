@@ -75,6 +75,9 @@ struct PowerButton
             return n;
         }
 
+        phosphor::logging::log<phosphor::logging::level::DEBUG>(
+            "PowerButton event", phosphor::logging::entry("BUF=%c", buf));
+
         if (buf == '0')
         {
             // emit pressed signal

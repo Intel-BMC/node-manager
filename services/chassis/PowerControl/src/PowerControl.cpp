@@ -33,11 +33,11 @@ int32_t PowerControl::setPowerState(int32_t newState) {
   char buf;
 
   phosphor::logging::log<phosphor::logging::level::DEBUG>(
-      "setPowerState", phosphor::logging::entry("newState=%d", newState));
+      "setPowerState", phosphor::logging::entry("NEWSTATE=%d", newState));
 
   if (state() == newState) {
     phosphor::logging::log<phosphor::logging::level::DEBUG>(
-        "Same powerstate", phosphor::logging::entry("newState=%d", newState));
+        "Same powerstate", phosphor::logging::entry("NEWSTATE=%d", newState));
   }
 
   if (newState == 1) {

@@ -16,7 +16,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "i2c bus des not exist!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
         return -1;
     }
 
@@ -26,7 +26,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in open!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
         return -1;
     }
 
@@ -35,7 +35,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in I2C_FUNCS!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
 
         ::close(fd);
         return -1;
@@ -47,7 +47,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "i2c bus des not support write!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
         ::close(fd);
         return -1;
     }
@@ -57,7 +57,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in I2C_SLAVE_FORCE!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
         ::close(fd);
         return -1;
     }
@@ -67,7 +67,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in i2c write!",
             phosphor::logging::entry("PATH=%s", devPath.c_str()),
-            phosphor::logging::entry("slaveAddr=%d", slaveAddr));
+            phosphor::logging::entry("SLAVEADDR=%d", slaveAddr));
         ::close(fd);
         return -1;
     }
@@ -75,9 +75,9 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
     phosphor::logging::log<phosphor::logging::level::DEBUG>(
         "i2cset successfully",
         phosphor::logging::entry("PATH=%s", devPath.c_str()),
-        phosphor::logging::entry("slaveAddr=0x%x", slaveAddr),
-        phosphor::logging::entry("regAddr=0x%x", regAddr),
-        phosphor::logging::entry("value=0x%x", value));
+        phosphor::logging::entry("SLAVEADDR=0x%x", slaveAddr),
+        phosphor::logging::entry("REGADDR=0x%x", regAddr),
+        phosphor::logging::entry("VALUE=0x%x", value));
     ::close(fd);
     return 0;
 }
