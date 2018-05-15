@@ -25,6 +25,7 @@ constexpr auto HOST_START_TARGET = "obmc-host-start@0.target";
 constexpr auto CHASSIS_HARD_POWER_OFF_TARGET =
     "obmc-chassis-hard-poweroff@0.target";
 constexpr auto CHASSIS_POWER_OFF_TARGET = "obmc-chassis-poweroff@0.target";
+constexpr auto CHASSIS_POWER_ON_TARGET = "obmc-chassis-poweron@0.target";
 
 constexpr auto POWER_CONTROL_SERVICE =
     "xyz.openbmc_project.Chassis.Control.Power";
@@ -36,12 +37,12 @@ constexpr auto POWER_CONTROL_INTERFACE =
 int32_t ChassisControl::powerOn() {
   auto method = mBus.new_method_call(SYSTEMD_SERVICE, SYSTEMD_OBJ_PATH,
                                      SYSTEMD_INTERFACE, "StartUnit");
-  method.append(HOST_START_TARGET);
+  method.append(CHASSIS_POWER_ON_TARGET);
   method.append("replace");
   auto response = mBus.call(method);
   if (response.is_method_error()) {
     phosphor::logging::log<phosphor::logging::level::ERR>(
-        "ERROR: Failed to run host start target");
+        "ERROR: Failed to run obmc-chassis-poweron@0.target");
     return -1;
   }
 
@@ -55,7 +56,7 @@ int32_t ChassisControl::powerOff() {
   auto response = mBus.call(method);
   if (response.is_method_error()) {
     phosphor::logging::log<phosphor::logging::level::ERR>(
-        "ERROR: Failed to run chassis hard power off target");
+        "ERROR: Failed to run obmc-chassis-poweroff@0.target");
     return -1;
   }
 
