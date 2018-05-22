@@ -13,6 +13,7 @@
 #include <xyz/openbmc_project/Common/error.hpp>
 #include "ResetButton.hpp"
 #include "PowerButton.hpp"
+#include "IDButton.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -41,6 +42,8 @@ int main(int argc, char *argv[])
     PowerButton powerButton{bus, POWER_DBUS_OBJECT_NAME, eventP};
 
     ResetButton resetButton{bus, RESET_DBUS_OBJECT_NAME, eventP};
+
+    IDButton idButton{bus, ID_DBUS_OBJECT_NAME, eventP};
 
     try
     {

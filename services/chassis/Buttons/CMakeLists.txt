@@ -17,13 +17,17 @@ set(POWER_DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Buttons.Power")
 set(RESET_DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Buttons/Reset")
 set(RESET_DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Buttons.Reset")
 
-add_definitions(-DPOWER_DBUS_OBJECT_NAME="/${POWER_DBUS_OBJECT_NAME}0")
+set(ID_DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Buttons/ID")
+set(ID_DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Buttons.ID")
 
+add_definitions(-DPOWER_DBUS_OBJECT_NAME="/${POWER_DBUS_OBJECT_NAME}0")
 add_definitions(-DRESET_DBUS_OBJECT_NAME="/${RESET_DBUS_OBJECT_NAME}0")
+add_definitions(-DID_DBUS_OBJECT_NAME="/${ID_DBUS_OBJECT_NAME}0")
 
 set(SRC_FILES
     src/PowerButton.cpp
     src/ResetButton.cpp
+    src/IDButton.cpp
     src/main.cpp
 )
 set(GENERATED_SRC_FILES
@@ -31,6 +35,8 @@ set(GENERATED_SRC_FILES
     ${POWER_DBUS_OBJECT_NAME}/server.cpp
     ${RESET_DBUS_OBJECT_NAME}/error.cpp
     ${RESET_DBUS_OBJECT_NAME}/server.cpp
+    ${ID_DBUS_OBJECT_NAME}/error.cpp
+    ${ID_DBUS_OBJECT_NAME}/server.cpp
 )
 
 # import libsystemd
@@ -61,6 +67,19 @@ link_directories(${DBUSINTERFACE_LIBRARY_DIRS})
 #include_directories(${CMAKE_CURRENT_BINARY_DIR}/${DBUS_OBJECT_NAME})
 
 add_custom_command(
+    OUTPUT ${ID_DBUS_OBJECT_NAME}/error.hpp
+    OUTPUT ${ID_DBUS_OBJECT_NAME}/error.cpp
+    COMMAND mkdir -p ${ID_DBUS_OBJECT_NAME}
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} error exception-header ${ID_DBUS_INTF_NAME} > ${ID_DBUS_OBJECT_NAME}/error.hpp
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} error exception-cpp ${ID_DBUS_INTF_NAME} > ${ID_DBUS_OBJECT_NAME}/error.cpp
+    DEPENDS ${ID_DBUS_OBJECT_NAME}.errors.yaml
+)
+set_source_files_properties(
+    ${ID_DBUS_OBJECT_NAME}/error.hpp
+    ${ID_DBUS_OBJECT_NAME}/error.cpp
+    PROPERTIES GENERATED TRUE)
+
+add_custom_command(
     OUTPUT ${POWER_DBUS_OBJECT_NAME}/error.hpp
     OUTPUT ${POWER_DBUS_OBJECT_NAME}/error.cpp
     COMMAND mkdir -p ${POWER_DBUS_OBJECT_NAME}
@@ -84,6 +103,19 @@ add_custom_command(
 set_source_files_properties(
     ${RESET_DBUS_OBJECT_NAME}/error.hpp
     ${RESET_DBUS_OBJECT_NAME}/error.cpp
+    PROPERTIES GENERATED TRUE)
+
+add_custom_command(
+    OUTPUT ${ID_DBUS_OBJECT_NAME}/server.hpp
+    OUTPUT ${ID_DBUS_OBJECT_NAME}/server.cpp
+    COMMAND mkdir -p ${ID_DBUS_OBJECT_NAME}
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} interface server-header ${ID_DBUS_INTF_NAME} > ${ID_DBUS_OBJECT_NAME}/server.hpp
+    COMMAND ${SDBUSPLUSPLUS} -r ${CMAKE_CURRENT_SOURCE_DIR} interface server-cpp ${ID_DBUS_INTF_NAME} > ${ID_DBUS_OBJECT_NAME}/server.cpp
+    DEPENDS ${ID_DBUS_OBJECT_NAME}.interface.yaml
+)
+set_source_files_properties(
+    ${POWER_DBUS_OBJECT_NAME}/server.hpp
+    ${POWER_DBUS_OBJECT_NAME}/server.cpp
     PROPERTIES GENERATED TRUE)
 
 add_custom_command(
