@@ -37,8 +37,7 @@ constexpr auto POWER_CONTROL_INTERFACE =
 int32_t ChassisControl::powerOn() {
   auto method = mBus.new_method_call(SYSTEMD_SERVICE, SYSTEMD_OBJ_PATH,
                                      SYSTEMD_INTERFACE, "StartUnit");
-  method.append(CHASSIS_POWER_ON_TARGET);
-  method.append("replace");
+  method.append(HOST_START_TARGET, "replace");
   auto response = mBus.call(method);
   if (response.is_method_error()) {
     phosphor::logging::log<phosphor::logging::level::ERR>(
