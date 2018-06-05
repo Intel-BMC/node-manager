@@ -33,6 +33,8 @@ constexpr auto POWER_CONTROL_OBJ_PATH =
     "/xyz/openbmc_project/Chassis/Control/Power0";
 constexpr auto POWER_CONTROL_INTERFACE =
     "xyz.openbmc_project.Chassis.Control.Power";
+constexpr auto HOST_STATE_REBOOT_TGT = "obmc-host-reboot@0.target";
+
 
 int32_t ChassisControl::powerOn() {
   auto method = mBus.new_method_call(SYSTEMD_SERVICE, SYSTEMD_OBJ_PATH,
@@ -67,8 +69,17 @@ int32_t ChassisControl::softPowerOff() {
   return 0;
 }
 int32_t ChassisControl::reboot() {
-  // TODO
-  return 0;
+    auto method = mBus.new_method_call(SYSTEMD_SERVICE, SYSTEMD_OBJ_PATH,
+                                        SYSTEMD_INTERFACE, "StartUnit");
+    method.append(HOST_STATE_REBOOT_TGT, "replace");
+    auto response = mBus.call(method);
+    if (response.is_method_error()) {
+      phosphor::logging::log<phosphor::logging::level::ERR>(
+        "ERROR: Failed to run obmc-host-reboot@0.target");
+      return -1;
+    }
+
+    return 0;
 }
 int32_t ChassisControl::softReboot() {
   // TODO
@@ -94,20 +105,3 @@ int32_t ChassisControl::getPowerState() {
   return state;
 }
 
-void ChassisControl::powerButtonPressed(sdbusplus::message::message &msg) {
-
-  phosphor::logging::log<phosphor::logging::level::INFO>(
-      "powerButtonPressed callback function is called...");
-  int32_t state = -1;
-  state = getPowerState();
-  if (POWER_ON == state) {
-    powerOff();
-  } else if (POWER_OFF == state) {
-    powerOn();
-  } else {
-    phosphor::logging::log<phosphor::logging::level::ERR>(
-        "UNKNOWN power state");
-  }
-
-  return;
-}

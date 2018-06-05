@@ -7,6 +7,9 @@
 constexpr auto POWER_BUTTON_PATH =
     "/xyz/openbmc_project/Chassis/Buttons/Power0";
 constexpr auto POWER_BUTTON_INTF = "xyz.openbmc_project.Chassis.Buttons.Power";
+constexpr auto RESET_BUTTON_PATH =
+    "/xyz/openbmc_project/Chassis/Buttons/Reset0";
+constexpr auto RESET_BUTTON_INTF = "xyz.openbmc_project.Chassis.Buttons.Reset";
 
 const static int32_t POWER_OFF = 0;
 const static int32_t POWER_ON = 1;
@@ -31,8 +34,34 @@ struct ChassisControl
             sdbusRule::type::signal() + sdbusRule::member("Pressed") +
                 sdbusRule::path(POWER_BUTTON_PATH) +
                 sdbusRule::interface(POWER_BUTTON_INTF),
-            std::bind(std::mem_fn(&ChassisControl::powerButtonPressed), this,
-                      std::placeholders::_1)) {
+            [this](sdbusplus::message::message &msg) {
+                  phosphor::logging::log<phosphor::logging::level::INFO>(
+                      "powerButtonPressed callback function is called...");
+                  int32_t state = -1;
+                  state = this->getPowerState();
+                  if (POWER_ON == state) {
+                    this->powerOff();
+                  } else if (POWER_OFF == state) {
+                    this->powerOn();
+                  } else {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "UNKNOWN power state");
+                  }
+                  return;
+                }
+         ),
+         resetButtonPressedSignal(
+            bus,
+            sdbusRule::type::signal() + sdbusRule::member("Pressed") +
+                sdbusRule::path(RESET_BUTTON_PATH) +
+                sdbusRule::interface(RESET_BUTTON_INTF),
+            [this](sdbusplus::message::message &msg) {
+                  phosphor::logging::log<phosphor::logging::level::INFO>(
+                      "resetButtonPressed callback function is called...");
+                  this->reboot();
+                  return;
+                }
+          ){
     phosphor::logging::log<phosphor::logging::level::DEBUG>(
         "ChassisControl is created.");
   }
@@ -49,5 +78,5 @@ private:
   sdbusplus::bus::bus &mBus;
 
   sdbusplus::bus::match_t powerButtonPressedSignal;
-  void powerButtonPressed(sdbusplus::message::message &m);
+  sdbusplus::bus::match_t resetButtonPressedSignal;
 };
