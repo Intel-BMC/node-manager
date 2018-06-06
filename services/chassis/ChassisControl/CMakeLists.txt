@@ -14,7 +14,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(DBUS_OBJECT_NAME "xyz/openbmc_project/Chassis/Control/Chassis")
 set(DBUS_INTF_NAME "xyz.openbmc_project.Chassis.Control.Chassis")
 
-add_definitions(-DDBUS_OBJECT_NAME="/${DBUS_OBJECT_NAME}")
+add_definitions(-DDBUS_OBJECT_NAME="/${DBUS_OBJECT_NAME}0")
 add_definitions(-DDBUS_INTF_NAME="${DBUS_INTF_NAME}")
 
 set(SRC_FILES

@@ -18,11 +18,6 @@
 #include <unistd.h>
 #include <xyz/openbmc_project/Common/error.hpp>
 
-constexpr auto CHASSIS_CONTROL_PATH =
-    "/xyz/openbmc_project/Chassis/Control/Chassis/";
-constexpr auto CHASSIS_CONTROL_NAME =
-    "xyz.openbmc_project.Chassis.Control.Chassis";
-
 int main(int argc, char *argv[]) {
   int ret = 0;
 
@@ -39,9 +34,9 @@ int main(int argc, char *argv[]) {
   event = nullptr;
 
   auto bus = sdbusplus::bus::new_default();
-  sdbusplus::server::manager::manager objManager{bus, CHASSIS_CONTROL_PATH};
+  sdbusplus::server::manager::manager objManager{bus, DBUS_OBJECT_NAME};
 
-  bus.request_name(CHASSIS_CONTROL_NAME);
+  bus.request_name(DBUS_INTF_NAME);
 
   ChassisControl chassisControl{bus, DBUS_OBJECT_NAME, eventP};
 
