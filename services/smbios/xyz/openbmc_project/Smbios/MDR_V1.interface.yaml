@@ -1,0 +1,116 @@
+description: >
+    smbios MDR V1 service
+methods:
+    - name: RegionStatus
+      description: >
+          Get the region status with the given region ID
+      parameters:
+        - name: regionId
+          type: byte
+          description: >
+              region ID of Regions.
+      returns:
+        - name: status
+          type: array[byte]
+          description: >
+            The result of region status.
+      errors:
+       - self.Error.InvalidParameter
+
+    - name: RegionComplete
+      description: >
+          Set complete status to region
+      parameters:
+        - name: regionId
+          type: byte
+          description:
+              region ID of Regions.
+      errors:
+       - self.Error.InvalidParameter
+       - self.Error.IOError
+
+    - name: RegionRead
+      description: >
+          Read Region Data from BMC Memory
+      parameters:
+        - name: regionId
+          type: byte
+          description: >
+              region ID of Regions.
+        - name: length
+          type: byte
+          description: >
+              length of read data
+        - name: offset
+          type: uint16
+          description: >
+              offset of read data
+      returns:
+        - name: regionData
+          type: array[byte]
+          description: >
+              region data user want to read.
+      errors:
+       - self.Error.InvalidParameter
+
+    - name: RegionWrite
+      description: >
+          Write Region Data to BMC Memory
+      parameters:
+        - name: regionData
+          type: array[byte]
+          description: >
+              Data need to write to memory
+      returns:
+        - name: status
+          type: string
+          description: >
+              The status of the write function
+      errors:
+       - self.Error.InvalidParameter
+
+    - name: RegionLock
+      description: >
+          Lock Region
+      parameters:
+        - name: sessionId
+          type: byte
+          description: >
+              Session ID
+        - name: regionId
+          type: byte
+          description: >
+              Region ID
+        - name: lockPolicy
+          type: byte
+          description: >
+              The policy to lock region
+        - name: timeout
+          type: uint16
+          description: >
+              Timeout when try to lock region
+      returns:
+        - name: returnSessionId
+          type: byte
+          description: >
+              return the lock session ID
+      errors:
+       - self.Error.InvalidParameter
+
+properties:
+    - name: RegionId
+      type: byte
+      description: >
+          ID of Region
+    - name: SessionId
+      type: byte
+      description: >
+          ID of session
+    - name: LockPolicy
+      type: byte
+      description: >
+          The policy of the lock
+    - name: RegionUsed
+      type: uint16
+      description: >
+          If the region is used or not

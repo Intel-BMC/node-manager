@@ -1,0 +1,6 @@
+- name: InvalidParameter
+  description: >
+    An invalid parameter was attempted.
+- name: IOError
+  description: >
+    An IO Error happened.
