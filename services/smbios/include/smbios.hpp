@@ -25,6 +25,7 @@ static constexpr uint16_t smbiosTableStorageSize = 0xffff;
 
 static constexpr uint8_t mdrVersion = 0x11; // MDR version 1.1
 
+static constexpr const char *smbiosPath = "/etc/smbios";
 static constexpr const char *mdrType1File = "/etc/smbios/smbios1";
 static constexpr const char *mdrType2File = "/etc/smbios/smbios2";
 static constexpr const char *mdrAcpiFile = "/etc/smbios/acpi";
@@ -132,14 +133,14 @@ static inline uint8_t *smbiosTypePtr(uint8_t *smbiosDataIn, uint8_t typeId)
     {
         return nullptr;
     }
-    uint8_t *smbiosData = smbiosDataIn;
-    while ((*smbiosData | *(smbiosData + 1)) != 0)
+    char *smbiosData = reinterpret_cast<char *>(smbiosDataIn);
+    while ((*smbiosData != '\0') || (*(smbiosData + 1) != '\0'))
     {
         if (*smbiosData != typeId)
         {
             uint32_t len = *(smbiosData + 1);
             smbiosData += len;
-            while (*smbiosData | (*smbiosData - 1) != 0)
+            while ((*smbiosData != '\0') || (*(smbiosData + 1) != '\0'))
             {
                 smbiosData++;
                 len++;
@@ -148,9 +149,10 @@ static inline uint8_t *smbiosTypePtr(uint8_t *smbiosDataIn, uint8_t typeId)
                     return nullptr;
                 }
             }
+            smbiosData += separateLen;
             continue;
         }
-        return smbiosData;
+        return reinterpret_cast<uint8_t *>(smbiosData);
     }
     return nullptr;
 }

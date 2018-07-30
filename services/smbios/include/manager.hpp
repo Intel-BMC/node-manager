@@ -19,9 +19,14 @@
 #include "smbios.hpp"
 #include "timer.hpp"
 #include "xyz/openbmc_project/Smbios/MDR_V1/server.hpp"
+#include <phosphor-logging/elog-errors.hpp>
 #include "cpu.hpp"
 #include "dimm.hpp"
 #include "system.hpp"
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/io.h>
 
 namespace phosphor
 {
@@ -55,12 +60,33 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
         }
 
         std::copy(&region[0], &region[3], regionS);
+        if (access(smbiosPath, F_OK) == -1)
+        {
+            int flag = mkdir(smbiosPath, S_IRWXU);
+            if (flag != 0)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "create folder failed for reading smbios file");
+                return;
+            }
+        }
         for (int index = 0; index < maxMdrIndex - 1; index++)
         {
-            readDataFromFlash(reinterpret_cast<uint8_t *>(&regionS[index]));
+            bool status =
+                readDataFromFlash(reinterpret_cast<uint8_t *>(&regionS[index]),
+                                  regionS[index].flashName);
+            if (status)
+            {
+                restoreRegion = true;
+                regionComplete(index);
+            }
+            else
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "read data from flash failed",
+                    phosphor::logging::entry("REGION ID %d", index));
+            }
         }
-
-        system = std::make_unique<System>(bus, systemPath, &regionS[0]);
     }
 
     std::vector<uint8_t> regionStatus(uint8_t regionId) override;
@@ -95,8 +121,10 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
   private:
     sdbusplus::bus::bus &bus;
 
-    bool storeDataToFlash(uint8_t *data);
-    bool readDataFromFlash(uint8_t *data);
+    bool restoreRegion = false;
+
+    bool storeDataToFlash(uint8_t *data, const char *file);
+    bool readDataFromFlash(uint8_t *data, const char *file);
 
     uint8_t globalRegionId;
 

@@ -173,6 +173,7 @@ void MDR_V1::systemInfoUpdate()
     std::vector<std::unique_ptr<Dimm>>().swap(dimms);
     std::vector<std::unique_ptr<Cpu>>().swap(cpus);
 
+    system = std::make_unique<System>(bus, systemPath, &regionS[0]);
     for (int index = 0; index < num; index++)
     {
         path = dimmPath + std::to_string(index);
@@ -191,9 +192,9 @@ void MDR_V1::systemInfoUpdate()
     }
 }
 
-bool MDR_V1::readDataFromFlash(uint8_t *data)
+bool MDR_V1::readDataFromFlash(uint8_t *data, const char *file)
 {
-    std::ifstream filePtr(mdrType1File, std::ios_base::binary);
+    std::ifstream filePtr(file, std::ios_base::binary);
     if (!filePtr.good())
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
@@ -212,9 +213,9 @@ bool MDR_V1::readDataFromFlash(uint8_t *data)
     return true;
 }
 
-bool MDR_V1::storeDataToFlash(uint8_t *data)
+bool MDR_V1::storeDataToFlash(uint8_t *data, const char *file)
 {
-    std::ofstream filePtr(mdrType1File, std::ios_base::binary);
+    std::ofstream filePtr(file, std::ios_base::binary);
     if (!filePtr.good())
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
@@ -263,7 +264,25 @@ void MDR_V1::regionComplete(uint8_t regionId)
     //  TODO: Create a SEL Log
     systemInfoUpdate(); // Update CPU and DIMM information
 
-    if (!storeDataToFlash(reinterpret_cast<uint8_t *>(&regionS[regionId])))
+    // If BMC try to restore region data from BMC flash
+    // no need to store the data to flash again.
+    if (restoreRegion)
+    {
+        restoreRegion = false;
+        return;
+    }
+
+    if (access(smbiosPath, F_OK) == -1)
+    {
+        if (0 != mkdir(smbiosPath, S_IRWXU))
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "create folder failed for writting smbios file");
+            return;
+        }
+    }
+    if (!storeDataToFlash(reinterpret_cast<uint8_t *>(&regionS[regionId]),
+                          regionS[regionId].flashName))
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Store data to flash failed");
