@@ -77,4 +77,4 @@ target_link_libraries (smbiosapp ${SYSTEMD_LIBRARIES})
 target_link_libraries (smbiosapp ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries (smbiosapp ${SDBUSPLUSPLUS_LIBRARIES})
 
-install (TARGETS smbiosapp DESTINATION sbin/smbiosapp)
+install (TARGETS smbiosapp DESTINATION sbin)
