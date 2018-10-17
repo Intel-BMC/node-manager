@@ -24,6 +24,7 @@
 #include <phosphor-logging/elog-errors.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/server.hpp>
+#include <sdbusplus/timer.hpp>
 #include <xyz/openbmc_project/Smbios/MDR_V2/server.hpp>
 
 namespace phosphor
@@ -43,9 +44,9 @@ class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
     MDR_V2 &operator=(MDR_V2 &&) = delete;
     ~MDR_V2() = default;
 
-    MDR_V2(sdbusplus::bus::bus &bus, const char *path) :
+    MDR_V2(sdbusplus::bus::bus &bus, const char *path, sd_event *event) :
         sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2(bus, path),
-        bus(bus)
+        bus(bus), timer(event, [&](void) { agentSynchronizeData(); })
     {
 
         smbiosDir.agentVersion = smbiosAgentVersion;
@@ -57,6 +58,10 @@ class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
 
         std::copy(smbiosTableId.begin(), smbiosTableId.end(),
                   smbiosDir.dir[smbiosDirIndex].common.id.dataInfo);
+
+        smbiosDir.dir[smbiosDirIndex].dataStorage = smbiosTableStorage;
+
+        agentSynchronizeData();
     }
 
     std::vector<uint8_t> getDirectoryInformation(uint8_t dirIndex) override;
@@ -83,14 +88,19 @@ class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
     uint8_t directoryEntries(uint8_t value) override;
 
   private:
+    Timer timer;
+
     sdbusplus::bus::bus &bus;
 
     Mdr2DirStruct smbiosDir;
+
+    bool readDataFromFlash(MDRSMBIOSHeader *mdrHdr, uint8_t *data);
 
     const std::array<uint8_t, 16> smbiosTableId{
         40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 0x42};
     uint8_t smbiosTableStorage[smbiosTableStorageSize];
 
+    bool smbiosIsUpdating(uint8_t index);
     bool smbiosIsAvailForUpdate(uint8_t index);
     inline uint8_t smbiosValidFlag(uint8_t index);
 };

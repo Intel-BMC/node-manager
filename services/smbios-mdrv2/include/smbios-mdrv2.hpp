@@ -21,7 +21,7 @@
 static constexpr const char *mdrType2File = "/etc/smbios/smbios2";
 static constexpr const char *smbiosPath = "/etc/smbios";
 
-static constexpr uint16_t mdrSmbiosSize = 32 * 1024;
+static constexpr uint16_t mdrSMBIOSSize = 32 * 1024;
 
 constexpr uint16_t smbiosAgentId = 0x0101;
 constexpr int firstAgentIndex = 1;
@@ -43,7 +43,7 @@ constexpr uint32_t smbiosTableTimestamp = 0x45464748;
 constexpr uint32_t smbiosSMMemoryOffset = 0;
 constexpr uint32_t smbiosSMMemorySize = 1024 * 1024;
 constexpr uint32_t smbiosTableStorageSize = 64 * 1024;
-constexpr uint32_t defaultTimeout = 200;
+constexpr uint32_t defaultTimeout = 2000;
 
 enum class MDR2SMBIOSStatusEnum
 {
@@ -109,7 +109,7 @@ typedef struct
     Mdr2DirLocalStruct dir[maxDirEntries];
 } Mdr2DirStruct;
 
-struct MDRSmbiosHeader
+struct MDRSMBIOSHeader
 {
     uint8_t dirVer;
     uint8_t mdrType;

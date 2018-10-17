@@ -29,7 +29,7 @@ int main(void)
     bus.attach_event(events, SD_EVENT_PRIORITY_NORMAL);
     bus.request_name("xyz.openbmc_project.Smbios.MDR_V2");
 
-    phosphor::smbios::MDR_V2 mdrV2(bus, phosphor::smbios::mdrV2Path);
+    phosphor::smbios::MDR_V2 mdrV2(bus, phosphor::smbios::mdrV2Path, events);
 
     while (true)
     {
@@ -42,5 +42,6 @@ int main(void)
             return -1;
         }
     }
+
     return 0;
 }
