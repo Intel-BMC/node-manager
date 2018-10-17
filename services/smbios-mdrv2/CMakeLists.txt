@@ -31,7 +31,7 @@ pkg_check_modules (DBUSINTERFACE phosphor-dbus-interfaces REQUIRED)
 include_directories (${DBUSINTERFACE_INCLUDE_DIRS})
 link_directories (${DBUSINTERFACE_LIBRARY_DIRS})
 
-set (SRC_FILES src/mdrv2.cpp src/smbios-mdrv2-main.cpp)
+set (SRC_FILES src/mdrv2.cpp src/smbios-mdrv2-main.cpp src/cpu.cpp)
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 

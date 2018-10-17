@@ -15,6 +15,7 @@
 */
 
 #pragma once
+#include "cpu.hpp"
 #include "smbios-mdrv2.hpp"
 
 #include <sys/stat.h>
@@ -33,6 +34,7 @@ namespace smbios
 {
 
 static constexpr const char *mdrV2Path = "/xyz/openbmc_project/Smbios/MDR_V2";
+constexpr const int limitEntryLen = 0xff;
 
 class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
 {
@@ -103,6 +105,10 @@ class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
     bool smbiosIsUpdating(uint8_t index);
     bool smbiosIsAvailForUpdate(uint8_t index);
     inline uint8_t smbiosValidFlag(uint8_t index);
+    void systemInfoUpdate(void);
+
+    int getTotalCpuSlot(void);
+    std::vector<std::unique_ptr<Cpu>> cpus;
 };
 
 } // namespace smbios
