@@ -120,6 +120,12 @@ struct MDRSMBIOSHeader
 static constexpr const char *cpuPath =
     "/xyz/openbmc_project/inventory/system/chassis/motherboard/cpu";
 
+static constexpr const char *dimmPath =
+    "/xyz/openbmc_project/inventory/system/chassis/motherboard/dimm";
+
+static constexpr const char *systemPath =
+    "/xyz/openbmc_project/inventory/system/chassis/motherboard/bios";
+
 typedef enum
 {
     biosType = 0,

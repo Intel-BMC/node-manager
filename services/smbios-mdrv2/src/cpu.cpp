@@ -39,7 +39,7 @@ std::string Cpu::processorSocket(std::string value)
 
 void Cpu::cpuType(const uint8_t value)
 {
-    std::map<uint8_t, std::string>::const_iterator it =
+    std::map<uint8_t, const char *>::const_iterator it =
         processorTypeTable.find(value);
     if (it == processorTypeTable.end())
     {
@@ -59,7 +59,8 @@ std::string Cpu::processorType(std::string value)
 
 void Cpu::cpuFamily(const uint8_t value)
 {
-    std::map<uint8_t, std::string>::const_iterator it = familyTable.find(value);
+    std::map<uint8_t, const char *>::const_iterator it =
+        familyTable.find(value);
     if (it == familyTable.end())
     {
         processorFamily("Unknown Processor Family");

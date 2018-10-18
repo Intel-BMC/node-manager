@@ -15,7 +15,7 @@
 */
 
 #pragma once
-#include "smbios-mdrv2.hpp"
+#include "smbios_mdrv2.hpp"
 
 #include <xyz/openbmc_project/Inventory/Item/Cpu/server.hpp>
 
@@ -26,13 +26,13 @@ namespace smbios
 {
 
 // Definition follow smbios spec DSP0134 3.0.0
-static const std::map<uint8_t, std::string> processorTypeTable = {
+static const std::map<uint8_t, const char *> processorTypeTable = {
     {0x1, "Other"},          {0x2, "Unknown"},       {0x3, "Central Processor"},
     {0x4, "Math Processor"}, {0x5, "DSP Processor"}, {0x6, "Video Processor"},
 };
 
 // Definition follow smbios spec DSP0134 3.0.0
-static const std::map<uint8_t, std::string> familyTable = {
+static const std::map<uint8_t, const char *> familyTable = {
     {0x1, "Other"},
     {0x2, "Unknown"},
     {0x10, "Pentium II Xeon processor"},
@@ -68,22 +68,23 @@ static const std::map<uint8_t, std::string> familyTable = {
 };
 
 // Definition follow smbios spec DSP0134 3.0.0
-static const std::string characteristicsTable[16]{"Reserved",
-                                                  "Unknown",
-                                                  "64-bit Capable",
-                                                  "Multi-Core",
-                                                  "Hardware Thread",
-                                                  "Execute Protection",
-                                                  "Enhanced Virtualization",
-                                                  "Power/Performance Control",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved",
-                                                  "Reserved"};
+static const std::array<std::string, 16> characteristicsTable{
+    "Reserved",
+    "Unknown",
+    "64-bit Capable",
+    "Multi-Core",
+    "Hardware Thread",
+    "Execute Protection",
+    "Enhanced Virtualization",
+    "Power/Performance Control",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved"};
 
 class Cpu : sdbusplus::server::object::object<
                 sdbusplus::xyz::openbmc_project::Inventory::Item::server::Cpu>
