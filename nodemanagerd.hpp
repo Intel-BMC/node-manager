@@ -24,10 +24,12 @@
  */
 constexpr const char *nmdBus = "xyz.openbmc_project.Ipmi.NodeManagerd";
 constexpr const char *nmdObj = "/xyz/openbmc_project/Ipmi/NodeManagerd";
-constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
-
-constexpr const char *nmdIntf = "org.openbmc.Readings";
 constexpr const char *propObj = "/xyz/openbmc_project/Ipmi/NodeManagerd/";
+constexpr const char *nmdIntf = "org.openbmc.Readings";
+
+constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
+constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
+constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
 
 /**
  * @brief NMd defines
@@ -36,6 +38,11 @@ constexpr uint32_t readingsInterval = 10; // seconds
 constexpr uint32_t framesInterval =
     100; // msec - number of frames per reading * framesInterval should be 2x
          // less than readingsInterval
+
+/**
+ * @brief Ipmb defines
+ */
+constexpr uint8_t ipmbMeChannelNum = 1;
 
 /**
  * @brief Ipmi defines
@@ -130,11 +137,12 @@ class Request
 {
   public:
     // virtual function for sending requests to Ipmb
-    virtual void sendRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
-                             std::vector<uint8_t> &dataToSend) = 0;
+    virtual void prepareRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
+                                std::vector<uint8_t> &dataToSend) = 0;
 
     // virtual function for handling responses from Ipmb
-    virtual void handleResponse(std::vector<uint8_t> &dataReceived) = 0;
+    virtual void handleResponse(const uint8_t completionCode,
+                                const std::vector<uint8_t> &dataReceived) = 0;
 
     virtual ~Request(){};
 
@@ -175,8 +183,14 @@ class getNmStatistics : public Request
         iface->initialize();
     }
 
-    void handleResponse(std::vector<uint8_t> &dataReceived)
+    void handleResponse(const uint8_t completionCode,
+                        const std::vector<uint8_t> &dataReceived)
     {
+        if (completionCode != 0)
+        {
+            return;
+        }
+
         if (dataReceived.size() != sizeof(nmIpmiGetNmStatisticsResp))
         {
             phosphor::logging::log<phosphor::logging::level::WARNING>(
@@ -185,7 +199,8 @@ class getNmStatistics : public Request
         }
 
         auto getNmStatistics =
-            reinterpret_cast<nmIpmiGetNmStatisticsResp *>(dataReceived.data());
+            reinterpret_cast<const nmIpmiGetNmStatisticsResp *>(
+                dataReceived.data());
 
         iface->set_property("Current", getNmStatistics->data.stats.cur);
         iface->set_property("Minimum", getNmStatistics->data.stats.min);
@@ -205,8 +220,8 @@ class getNmStatistics : public Request
                             getNmStatistics->policyActivationState);
     }
 
-    void sendRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
-                     std::vector<uint8_t> &dataToSend)
+    void prepareRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
+                        std::vector<uint8_t> &dataToSend)
     {
         dataToSend.resize(sizeof(nmIpmiGetNmStatisticsReq));
 
