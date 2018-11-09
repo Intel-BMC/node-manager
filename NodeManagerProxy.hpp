@@ -16,15 +16,15 @@
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
-#ifndef NODEMANAGERD_HPP
-#define NODEMANAGERD_HPP
+#ifndef NODEMANAGERPROXY_HPP
+#define NODEMANAGERPROXY_HPP
 
 /**
  * @brief Dbus
  */
-constexpr const char *nmdBus = "xyz.openbmc_project.Ipmi.NodeManagerd";
-constexpr const char *nmdObj = "/xyz/openbmc_project/Ipmi/NodeManagerd";
-constexpr const char *propObj = "/xyz/openbmc_project/Ipmi/NodeManagerd/";
+constexpr const char *nmdBus = "xyz.openbmc_project.Ipmi.NodeManagerProxy";
+constexpr const char *nmdObj = "/xyz/openbmc_project/Ipmi/NodeManagerProxy";
+constexpr const char *propObj = "/xyz/openbmc_project/Ipmi/NodeManagerProxy/";
 constexpr const char *nmdIntf = "org.openbmc.Readings";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";

@@ -13,7 +13,7 @@
  *  limitations under the License.
  */
 
-#include "nodemanagerd.hpp"
+#include "NodeManagerProxy.hpp"
 
 #include <boost/asio.hpp>
 #include <tuple>

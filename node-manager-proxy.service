@@ -1,0 +1,12 @@
+[Unit]
+Description=Node Manager Proxy
+After=ipmb.service
+
+[Service]
+ExecStart=/usr/sbin/node-manager-proxy
+SyslogIdentifier=node-manager-proxy
+Restart=always
+Type=simple
+
+[Install]
+WantedBy=basic.target
