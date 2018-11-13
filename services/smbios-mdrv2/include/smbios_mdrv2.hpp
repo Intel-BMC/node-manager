@@ -18,8 +18,8 @@
 
 #include <array>
 
-static constexpr const char *mdrType2File = "/etc/smbios/smbios2";
-static constexpr const char *smbiosPath = "/etc/smbios";
+static constexpr const char *mdrType2File = "/var/lib/smbios/smbios2";
+static constexpr const char *smbiosPath = "/var/lib/smbios";
 
 static constexpr uint16_t mdrSMBIOSSize = 32 * 1024;
 
@@ -43,7 +43,7 @@ constexpr uint32_t smbiosTableTimestamp = 0x45464748;
 constexpr uint32_t smbiosSMMemoryOffset = 0;
 constexpr uint32_t smbiosSMMemorySize = 1024 * 1024;
 constexpr uint32_t smbiosTableStorageSize = 64 * 1024;
-constexpr uint32_t defaultTimeout = 2000;
+constexpr uint32_t defaultTimeout = 20000;
 
 enum class MDR2SMBIOSStatusEnum
 {
