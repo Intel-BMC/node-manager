@@ -51,19 +51,15 @@ class GpioEn
 class GpioManager
 {
     std::vector<GpioEn> gpioEnableList;
-    std::vector<std::experimental::filesystem::path> gpioPaths;
     sdbusplus::asio::object_server& server;
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
     std::vector<std::string> paths;
 
     GpioEn* findGpioObj(const std::string& gpioName);
-    bool findGpioDirs(
-        const std::experimental::filesystem::path& dirPath,
-        const std::string& matchString,
-        std::vector<std::experimental::filesystem::path>& foundPaths);
 
   public:
     GpioManager(sdbusplus::asio::object_server& srv,
                 std::shared_ptr<sdbusplus::asio::connection>& conn);
+    void addObject(std::string path);
 };
