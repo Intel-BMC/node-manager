@@ -66,10 +66,14 @@ void GpioManager::addObject(std::string path)
                     return;
                 }
 
-                uint64_t index = indexFind->second.get<uint64_t>();
-                std::string gpioName = nameFind->second.get<std::string>();
+                uint64_t index = sdbusplus::message::variant_ns::get<uint64_t>(
+                    indexFind->second);
+                std::string gpioName =
+                    sdbusplus::message::variant_ns::get<std::string>(
+                        nameFind->second);
                 bool inverted =
-                    polarityFind->second.get<std::string>() == "Low";
+                    sdbusplus::message::variant_ns::get<std::string>(
+                        polarityFind->second) == "Low";
 
                 boost::replace_all(gpioName, " ", "_");
 
