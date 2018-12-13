@@ -46,5 +46,6 @@ add_executable (smbiosmdrv2app ${SRC_FILES})
 target_link_libraries (smbiosmdrv2app ${SYSTEMD_LIBRARIES})
 target_link_libraries (smbiosmdrv2app ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries (smbiosmdrv2app ${SDBUSPLUSPLUS_LIBRARIES})
+target_link_libraries (smbiosmdrv2app phosphor_logging)
 
 install (TARGETS smbiosmdrv2app DESTINATION sbin)

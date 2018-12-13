@@ -76,5 +76,6 @@ add_executable (smbiosapp ${SRC_FILES})
 target_link_libraries (smbiosapp ${SYSTEMD_LIBRARIES})
 target_link_libraries (smbiosapp ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries (smbiosapp ${SDBUSPLUSPLUS_LIBRARIES})
+target_link_libraries (smbiosapp phosphor_logging)
 
 install (TARGETS smbiosapp DESTINATION sbin)
