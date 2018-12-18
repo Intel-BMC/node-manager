@@ -33,6 +33,7 @@ add_executable(${PROJECT_NAME} ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} systemd)
 target_link_libraries(${PROJECT_NAME} sdbusplus -lstdc++fs)
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} phosphor_logging)
 
 link_directories(${EXTERNAL_INSTALL_LOCATION}/lib)
 
@@ -40,3 +41,4 @@ set(SERVICE_FILES ${PROJECT_SOURCE_DIR}/gpiodaemon.service)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION sbin)
 install(FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
+
