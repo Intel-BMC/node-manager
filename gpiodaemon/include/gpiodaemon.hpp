@@ -25,6 +25,7 @@ class GpioEn
     std::string name;
     uint16_t number;
     bool enabled;
+    bool value;
 
   public:
     GpioEn(const std::string& name_, uint16_t number_, bool enabled_) :
@@ -46,20 +47,87 @@ class GpioEn
     {
         enabled = value;
     }
+    bool getValue() const
+    {
+        return value;
+    }
+    void setvalue(bool val)
+    {
+        value = val;
+    }
+};
+
+class GpioState
+{
+    bool state = true;
+    const bool inverted;
+    const std::string gpioName;
+    int fdValue;
+
+    boost::asio::ip::tcp::socket inputDev;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
+
+    void monitor(void);
+    void readValue(void);
+
+  public:
+    GpioState(const std::string gpioName, const uint16_t gpioNumber,
+              const bool inverted, boost::asio::io_service& io,
+              std::shared_ptr<sdbusplus::asio::dbus_interface>& iface);
+    GpioState(GpioState&&) = default;
+    GpioState& operator=(GpioState&&) = default;
+    ~GpioState();
+
+    std::string getName() const
+    {
+        return gpioName;
+    }
+    bool getValue(void) const
+    {
+        return state;
+    }
 };
 
 class GpioManager
 {
-    std::vector<GpioEn> gpioEnableList;
+    boost::asio::io_service& io;
     sdbusplus::asio::object_server& server;
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
-    std::vector<std::string> paths;
 
-    GpioEn* findGpioObj(const std::string& gpioName);
+    std::vector<GpioEn> gpioEnableList;
+    std::vector<std::unique_ptr<GpioState>> gpioMonitorList;
+
+    GpioEn* findGpioObj(const std::string& gpioName)
+    {
+        auto el = std::find_if(gpioEnableList.begin(), gpioEnableList.end(),
+                               [&gpioName](const GpioEn& obj) {
+                                   return obj.getName() == gpioName;
+                               });
+        if (el != gpioEnableList.end())
+        {
+            return &(*el);
+        }
+        return nullptr;
+    }
+
+    bool getGpioStateValue(const std::string& gpioName, bool& value)
+    {
+        for (const auto& gpio : gpioMonitorList)
+        {
+            if (gpio->getName() == gpioName)
+            {
+                value = gpio->getValue();
+                return true;
+            }
+        }
+        return false;
+    }
 
   public:
-    GpioManager(sdbusplus::asio::object_server& srv,
+    GpioManager(boost::asio::io_service& io,
+                sdbusplus::asio::object_server& srv,
                 std::shared_ptr<sdbusplus::asio::connection>& conn);
-    void addObject(std::string path);
+
+    void addObject(const std::string& path);
 };

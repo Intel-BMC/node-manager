@@ -28,6 +28,7 @@ static constexpr const char* gpioConfigInterface =
     "xyz.openbmc_project.Configuration.Gpio";
 static constexpr const char* gpioInterface = "xyz.openbmc_project.Control.Gpio";
 static constexpr const char* gpioPath = "/xyz/openbmc_project/control/gpio/";
+static constexpr const char* sysGpioPath = "/sys/class/gpio/gpio";
 static constexpr const char* propInterface = "org.freedesktop.DBus.Properties";
 
 static constexpr const char* objPath = "/xyz/openbmc_project/object_mapper";
@@ -40,13 +41,13 @@ using BasicVariantType =
     sdbusplus::message::variant<std::string, int64_t, uint64_t, double, int32_t,
                                 uint32_t, int16_t, uint16_t, uint8_t, bool>;
 
-void GpioManager::addObject(std::string path)
+void GpioManager::addObject(const std::string& path)
 {
     conn->async_method_call(
         [this,
-         &path](boost::system::error_code ec,
-                const boost::container::flat_map<std::string, BasicVariantType>&
-                    result) {
+         path](boost::system::error_code ec,
+               const boost::container::flat_map<std::string, BasicVariantType>&
+                   result) {
             if (ec)
             {
                 phosphor::logging::log<phosphor::logging::level::INFO>(
@@ -100,10 +101,10 @@ void GpioManager::addObject(std::string path)
                 iface->register_property(
                     "Enabled", true,
                     [this, gpioName](const bool& req, bool& propertyValue) {
-                        auto it = findGpioObj(gpioName);
-                        if (it != nullptr)
+                        GpioEn* dbusGpio = findGpioObj(gpioName);
+                        if (dbusGpio)
                         {
-                            it->setEnabled(req);
+                            dbusGpio->setEnabled(req);
                             propertyValue = req;
                             return 1;
                         }
@@ -120,16 +121,16 @@ void GpioManager::addObject(std::string path)
                     // Override set
                     [this, gpioName, inverted](const bool& req,
                                                bool& propertyValue) {
-                        auto it = findGpioObj(gpioName);
+                        GpioEn* dbusGpio = findGpioObj(gpioName);
 
-                        if (it != nullptr)
+                        if (dbusGpio)
                         {
                             // If Gpio enabled property is set as true then
                             // reject set request
-                            if (it->getEnabled())
+                            if (dbusGpio->getEnabled())
                             {
                                 Gpio gpio =
-                                    Gpio(std::to_string(it->getNumber()));
+                                    Gpio(std::to_string(dbusGpio->getNumber()));
                                 bool setVal = req;
                                 if (inverted)
                                 {
@@ -137,12 +138,29 @@ void GpioManager::addObject(std::string path)
                                 }
                                 gpio.setValue(static_cast<GpioValue>(setVal));
 
-                                propertyValue = req;
+                                propertyValue = setVal;
                                 return 1;
                             }
                             return 0;
                         }
                         return 0;
+                    },
+                    // Override get
+                    [this, gpioName](const bool& propertyValue) {
+                        bool value;
+                        if (getGpioStateValue(gpioName, value))
+                        {
+                            return value;
+                        }
+                        else // Gpio with direction "out" are not monitored.
+                             // Return last know state.
+                        {
+                            GpioEn* dbuGpio = findGpioObj(gpioName);
+                            if (dbuGpio)
+                            {
+                                return dbuGpio->getValue();
+                            }
+                        }
                     });
 
                 iface->register_property(
@@ -150,16 +168,16 @@ void GpioManager::addObject(std::string path)
                     // Override set
                     [this, gpioName](const std::string& req,
                                      std::string& propertyValue) {
-                        auto it = findGpioObj(gpioName);
+                        GpioEn* dbusGpio = findGpioObj(gpioName);
 
-                        if (it != nullptr)
+                        if (dbusGpio)
                         {
                             // If Gpio enabled property is set as true than
                             // reject request
-                            if (it->getEnabled())
+                            if (dbusGpio->getEnabled())
                             {
                                 Gpio gpio =
-                                    Gpio(std::to_string(it->getNumber()));
+                                    Gpio(std::to_string(dbusGpio->getNumber()));
                                 gpio.setDirection(req);
 
                                 propertyValue = req;
@@ -168,77 +186,152 @@ void GpioManager::addObject(std::string path)
                             return 0;
                         }
                         return 0;
+                    },
+                    // Override get
+                    [this, index](const std::string& propertyDirection) {
+                        // Read present gpio data from /sys/class/gpio/...
+                        Gpio gpio = Gpio(std::to_string(index));
+                        return gpio.getDirection();
                     });
                 iface->initialize();
+
+                // Monitor gpio value changes
+                gpioMonitorList.push_back(std::make_unique<GpioState>(
+                    gpioName, index, inverted, io, iface));
             }
         },
         entityMgrService, path, propInterface, "GetAll", gpioConfigInterface);
 }
 
-GpioManager::GpioManager(sdbusplus::asio::object_server& srv_,
+GpioManager::GpioManager(boost::asio::io_service& io_,
+                         sdbusplus::asio::object_server& srv_,
                          std::shared_ptr<sdbusplus::asio::connection>& conn_) :
-    server(srv_),
-    conn(conn_)
+    io(io_),
+    server(srv_), conn(conn_)
 {
     using GetSubTreeType = std::vector<std::pair<
         std::string,
         std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+    constexpr int32_t scanDepth = 3;
 
-    auto mesg =
-        conn->new_method_call(objService, objPath, objInterface, "GetSubTree");
-
-    static const auto depth = 3;
-    mesg.append("/xyz/openbmc_project/inventory/system", depth,
-                std::vector<std::string>());
-
-    conn->async_send(mesg, [this](boost::system::error_code ec,
-                                  sdbusplus::message::message& ret) {
-        if (ec)
-        {
-            phosphor::logging::log<phosphor::logging::level::INFO>(
-                "ERROR with async_send");
-            return;
-        }
-        GetSubTreeType subtree;
-        ret.read(subtree);
-
-        for (const auto& i : subtree)
-        {
-            for (const auto& j : i.second)
+    conn->async_method_call(
+        [this](boost::system::error_code ec, GetSubTreeType& subtree) {
+            if (ec)
             {
-                for (const auto& k : j.second)
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                    "ERROR with async_method_call to ObjectMapper");
+                return;
+            }
+
+            for (const auto& objectPath : subtree)
+            {
+                for (const auto& objectInterfaces : objectPath.second)
                 {
-                    if (gpioConfigInterface == k)
+                    for (const auto& interface : objectInterfaces.second)
                     {
-                        addObject(i.first);
+                        if (gpioConfigInterface == interface)
+                        {
+                            addObject(objectPath.first);
+                        }
                     }
                 }
             }
-        }
-    });
+        },
+        "xyz.openbmc_project.ObjectMapper",
+        "/xyz/openbmc_project/object_mapper",
+        "xyz.openbmc_project.ObjectMapper", "GetSubTree",
+        "/xyz/openbmc_project/inventory/system", scanDepth,
+        std::vector<std::string>());
 }
 
-GpioEn* GpioManager::findGpioObj(const std::string& gpioName)
+GpioState::GpioState(const std::string gpioName_, const uint16_t gpioNumber,
+                     const bool inverted_, boost::asio::io_service& io_,
+                     std::shared_ptr<sdbusplus::asio::dbus_interface>& iface_) :
+    gpioName(gpioName_),
+    inverted(inverted_), inputDev(io_), iface(iface_)
 {
-    auto it = std::find_if(
-        gpioEnableList.begin(), gpioEnableList.end(),
-        [&gpioName](const GpioEn& obj) { return obj.getName() == gpioName; });
-    if (it != gpioEnableList.end())
+    // todo: implement gpio device character access
+    std::string device = sysGpioPath + std::to_string(gpioNumber);
+
+    fdValue = open((device + "/value").c_str(), O_RDONLY);
+    if (fdValue < 0)
     {
-        return &(*it);
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            ("GpioState: Error opening " + device).c_str());
+        return;
     }
-    return nullptr;
+
+    std::ofstream deviceFileEdge(device + "/edge");
+    if (!deviceFileEdge.good())
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            ("GpioState:Error setting edge for" + device).c_str());
+        return;
+    }
+    deviceFileEdge << "both"; // Will success only for gpio.direction == "in"
+    deviceFileEdge.close();
+
+    inputDev.assign(boost::asio::ip::tcp::v4(), fdValue);
+    monitor();
+    readValue();
+}
+
+GpioState::~GpioState()
+{
+    inputDev.close();
+    close(fdValue);
+}
+
+void GpioState::monitor(void)
+{
+    inputDev.async_wait(
+        boost::asio::ip::tcp::socket::wait_error,
+        [this](const boost::system::error_code& ec) {
+            if (ec == boost::system::errc::bad_file_descriptor)
+            {
+                return; // we're being destroyed
+            }
+            else if (ec)
+            {
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                    ("GpioState:monitor: Error on presence sensor socket"));
+            }
+            else
+            {
+                readValue();
+            }
+            monitor();
+        });
+}
+
+void GpioState::readValue(void)
+{
+    constexpr size_t readSize = sizeof("0");
+
+    std::string readBuf;
+    readBuf.resize(readSize);
+    lseek(fdValue, 0, SEEK_SET);
+
+    size_t r = ::read(fdValue, readBuf.data(), readSize);
+    bool value = std::stoi(readBuf);
+    if (inverted)
+    {
+        value = !value;
+    }
+    state = value;
+
+    // Broadcast value changed property signal
+    iface->signal_property("Value");
 }
 
 int main()
 {
     boost::asio::io_service io;
     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
-
     systemBus->request_name(gpioService);
     sdbusplus::asio::object_server server(systemBus);
 
-    GpioManager gpioMgr(server, systemBus);
+    GpioManager gpioMgr(io, server, systemBus);
 
     static auto match = std::make_unique<sdbusplus::bus::match::match>(
         static_cast<sdbusplus::bus::bus&>(*systemBus),
