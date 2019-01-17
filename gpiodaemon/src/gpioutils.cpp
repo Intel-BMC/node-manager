@@ -42,6 +42,7 @@ void Gpio::gpioExport()
         {
             gpioExport << gpioNumber;
         }
+        gpioExport.close();
     }
 }
 
@@ -55,6 +56,7 @@ void Gpio::gpioUnexport()
         {
             gpioExport << gpioNumber;
         }
+        gpioExport.close();
     }
 }
 
@@ -69,6 +71,7 @@ GpioValue Gpio::getValue()
     {
         gpioFile >> gpioValue;
     }
+    gpioFile.close();
 
     return gpioValue == "0" ? GpioValue::low : GpioValue::high;
 }
@@ -85,6 +88,7 @@ void Gpio::setValue(const GpioValue& value)
     {
         gpioFile << std::to_string((uint8_t)value);
     }
+    gpioFile.close();
 }
 
 std::string Gpio::getDirection()
@@ -98,6 +102,7 @@ std::string Gpio::getDirection()
     {
         gpioFile >> direction;
     }
+    gpioFile.close();
 
     return direction;
 }
