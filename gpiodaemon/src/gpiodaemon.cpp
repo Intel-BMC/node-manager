@@ -261,15 +261,19 @@ GpioState::GpioState(const std::string gpioName_, const uint16_t gpioNumber,
         return;
     }
 
-    std::ofstream deviceFileEdge(device + "/edge");
-    if (!deviceFileEdge.good())
+    Gpio gpio = Gpio(std::to_string(gpioNumber));
+    if (gpio.getDirection() == "in")
     {
-        phosphor::logging::log<phosphor::logging::level::INFO>(
-            ("GpioState:Error setting edge for" + device).c_str());
-        return;
+        std::ofstream deviceFileEdge(device + "/edge");
+        if (!deviceFileEdge.good())
+        {
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                ("GpioState:Error setting edge for" + device).c_str());
+            return;
+        }
+        deviceFileEdge << "both";
+        deviceFileEdge.close();
     }
-    deviceFileEdge << "both"; // Will success only for gpio.direction == "in"
-    deviceFileEdge.close();
 
     inputDev.assign(boost::asio::ip::tcp::v4(), fdValue);
     monitor();
