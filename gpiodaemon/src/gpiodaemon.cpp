@@ -125,12 +125,13 @@ void GpioManager::addObject(const std::string& path)
 
                         if (dbusGpio)
                         {
-                            // If Gpio enabled property is set as true then
-                            // reject set request
-                            if (dbusGpio->getEnabled())
+                            // If Gpio enabled property is set as true and
+                            // direction is out then handle the set request
+                            Gpio gpio =
+                                Gpio(std::to_string(dbusGpio->getNumber()));
+                            if (dbusGpio->getEnabled() &&
+                                gpio.getDirection() == "out")
                             {
-                                Gpio gpio =
-                                    Gpio(std::to_string(dbusGpio->getNumber()));
                                 bool setVal = req;
                                 if (inverted)
                                 {
@@ -172,8 +173,8 @@ void GpioManager::addObject(const std::string& path)
 
                         if (dbusGpio)
                         {
-                            // If Gpio enabled property is set as true than
-                            // reject request
+                            // If Gpio enabled property is set as true then
+                            // handle the request
                             if (dbusGpio->getEnabled())
                             {
                                 Gpio gpio =
