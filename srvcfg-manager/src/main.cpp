@@ -29,7 +29,11 @@ int main()
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
     timer = std::make_shared<boost::asio::deadline_timer>(io);
     conn->request_name(phosphor::service::serviceConfigSrvName);
-    auto server = sdbusplus::asio::object_server(conn);
+    auto server = sdbusplus::asio::object_server(conn, true);
+    auto mgrInterface =
+        server.add_interface("/xyz/openbmc_project/control/service", "");
+    mgrInterface->initialize();
+    server.add_manager("/xyz/openbmc_project/control/service");
     for (const auto &service : serviceList)
     {
         std::string objPath("/xyz/openbmc_project/control/service/" +
