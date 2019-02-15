@@ -126,6 +126,7 @@ void ServiceConfig::syncWithSystemD1Properties()
     std::string srvUnitName(sysDUnitName);
     if (srvUnitName == "dropbear")
     {
+        // Dropbear service expects template arguments.
         srvUnitName.append("@");
     }
     srvUnitName.append(".service");
@@ -137,7 +138,15 @@ void ServiceConfig::syncWithSystemD1Properties()
                     "async_method_call error: Failed to get property");
                 return;
             }
-            stateValue = pValue;
+            if ((pValue == "enabled") || (pValue == "static") ||
+                (pValue == "unmasked"))
+            {
+                stateValue = "enabled";
+            }
+            else if ((pValue == "disabled") || (pValue == "masked"))
+            {
+                stateValue = "disabled";
+            }
             conn->async_method_call(
                 [](boost::system::error_code ec) {
                     if (ec)
@@ -212,6 +221,12 @@ ServiceConfig::ServiceConfig(
 
 void ServiceConfig::applySystemDServiceConfig()
 {
+    if (updatedFlag)
+    {
+        // No updates. Just return.
+        return;
+    }
+
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Applying new settings.",
         phosphor::logging::entry("OBJPATH=%s", objPath.c_str()));
@@ -261,28 +276,46 @@ void ServiceConfig::applySystemDServiceConfig()
             phosphor::logging::elog<sdbusplus::xyz::openbmc_project::Common::
                                         Error::InternalFailure>();
         }
+    }
 
-        // Systemd forcing explicit socket stop before reload...!
-        std::string socketUnitName(sysDUnitName + ".socket");
-        systemdUnitAction(conn, socketUnitName, sysdActionStopUnit);
-
-        std::string srvUnitName(sysDUnitName + ".service");
-        systemdUnitAction(conn, srvUnitName, sysdActionStopUnit);
-
-        // Perform daemon reload to read new settings
-        systemdDaemonReload(conn);
-
-        // Restart the unit
-        systemdUnitAction(conn, socketUnitName, sysdActionStartUnit);
-        systemdUnitAction(conn, srvUnitName, sysdActionStartUnit);
+    std::string socketUnitName(sysDUnitName + ".socket");
+    std::string srvUnitName(sysDUnitName);
+    if (srvUnitName == "dropbear")
+    {
+        // Dropbear service expects template arguments.
+        // Todo: Unit action for service, fails with error
+        // "missing the instance name". Needs to implement
+        // getting all running instances and use it. This
+        // impact runtime but works fine during reboot.
+        srvUnitName.append("@");
+    }
+    srvUnitName.append(".service");
+    // Stop the running service in below scenarios.
+    // 1. State changed from "enabled" to "disabled"
+    // 2. No change in state and existing stateValue is
+    //    "enabled" and there is change in other properties.
+    if (((stateValue == "disabled") &&
+         (updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state)))) ||
+        (!(updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state))) &&
+         (stateValue == "enabled") && (updatedFlag)))
+    {
+        systemdUnitAction(conn, socketUnitName, "StopUnit");
+        systemdUnitAction(conn, srvUnitName, "StopUnit");
     }
 
     if (updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state)))
     {
-        if ((stateValue == "enabled") || (stateValue == "disabled"))
-        {
-            systemdUnitFileStateChange(conn, sysDUnitName, stateValue);
-        }
+        std::vector<std::string> unitFiles = {socketUnitName, srvUnitName};
+        systemdUnitFilesStateChange(conn, unitFiles, stateValue);
+    }
+
+    // Perform daemon reload to read new settings
+    systemdDaemonReload(conn);
+
+    if (stateValue == "enabled")
+    {
+        // Restart the socket
+        systemdUnitAction(conn, socketUnitName, "StartUnit");
     }
 
     // Reset the flag
@@ -290,8 +323,8 @@ void ServiceConfig::applySystemDServiceConfig()
 
     // All done. Lets reload the properties which are applied on systemd1.
     // TODO: We need to capture the service restart signal and reload data
-    // inside the signal handler. So that we can update the service properties
-    // modified, outside of this service as well.
+    // inside the signal handler. So that we can update the service
+    // properties modified, outside of this service as well.
     syncWithSystemD1Properties();
 
     return;
@@ -330,8 +363,6 @@ void ServiceConfig::registerProperties()
 
     iface->register_property(
         "Port", portNum, [this](const uint16_t &req, uint16_t &res) {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                " Inside register_property");
             if (req == res)
             {
                 return 1;
@@ -366,7 +397,7 @@ void ServiceConfig::registerProperties()
             {
                 return 1;
             }
-            if ((req != "enabled") && (req != "disabled") && (req != "static"))
+            if ((req != "enabled") && (req != "disabled"))
             {
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     "Invalid value specified");

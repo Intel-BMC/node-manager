@@ -28,6 +28,7 @@ void systemdDaemonReload(
                         "async error: Failed to do systemd reload.");
                     return;
                 }
+                return;
             },
             "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
             "org.freedesktop.systemd1.Manager", "Reload");
@@ -51,13 +52,17 @@ void systemdUnitAction(const std::shared_ptr<sdbusplus::asio::connection> &conn,
     {
         conn->async_method_call(
             [](boost::system::error_code ec,
-               const sdbusplus::message::object_path &res) {
+               const sdbusplus::message::object_path &objPath) {
                 if (ec)
                 {
                     phosphor::logging::log<phosphor::logging::level::ERR>(
                         "async error: Failed to do systemd action");
                     return;
                 }
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "Created unit action job.",
+                    phosphor::logging::entry("JobID=%s", objPath.str.c_str()));
+                return;
             },
             "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
             "org.freedesktop.systemd1.Manager", actionMethod, unitName,
@@ -75,15 +80,12 @@ void systemdUnitAction(const std::shared_ptr<sdbusplus::asio::connection> &conn,
     return;
 }
 
-void systemdUnitFileStateChange(
+void systemdUnitFilesStateChange(
     const std::shared_ptr<sdbusplus::asio::connection> &conn,
-    const std::string &unitName, const std::string &unitState)
+    const std::vector<std::string> &unitFiles, const std::string &unitState)
 {
     try
     {
-        // For now, we support two states(enabled & disabled). we can extend
-        // to other states (enable-runtime, mask, link etc..) if needed.
-        std::vector<std::string> unitFiles = {unitName};
         if (unitState == "enabled")
         {
             conn->async_method_call(
@@ -91,13 +93,14 @@ void systemdUnitFileStateChange(
                     if (ec)
                     {
                         phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "async error: Failed to do systemd reload.");
+                            "async error: Failed to perform UnmaskUnitFiles.");
                         return;
                     }
+                    return;
                 },
                 "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                "org.freedesktop.systemd1.Manager", "EnableUnitFiles",
-                unitFiles, false, false);
+                "org.freedesktop.systemd1.Manager", "UnmaskUnitFiles",
+                unitFiles, false);
         }
         else if (unitState == "disabled")
         {
@@ -106,13 +109,14 @@ void systemdUnitFileStateChange(
                     if (ec)
                     {
                         phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "async error: Failed to do systemd reload.");
+                            "async error: Failed to perform MaskUnitFiles.");
                         return;
                     }
+                    return;
                 },
                 "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                "org.freedesktop.systemd1.Manager", "DisableUnitFiles",
-                unitFiles, false);
+                "org.freedesktop.systemd1.Manager", "MaskUnitFiles", unitFiles,
+                false, false);
         }
         else
         {

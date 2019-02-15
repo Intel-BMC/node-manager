@@ -33,8 +33,8 @@ void systemdUnitAction(const std::shared_ptr<sdbusplus::asio::connection> &conn,
                        const std::string &unitName,
                        const std::string &actionMethod);
 
-void systemdUnitFileStateChange(
+void systemdUnitFilesStateChange(
     const std::shared_ptr<sdbusplus::asio::connection> &conn,
-    const std::string &unitName, const std::string &unitState);
+    const std::vector<std::string> &unitFiles, const std::string &unitState);
 
 bool checkSystemdUnitExist(const std::string &unitName);
