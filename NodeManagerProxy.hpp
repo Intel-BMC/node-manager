@@ -22,9 +22,9 @@
 /**
  * @brief Dbus
  */
-constexpr const char *nmdBus = "xyz.openbmc_project.Ipmi.NodeManagerProxy";
-constexpr const char *nmdObj = "/xyz/openbmc_project/Ipmi/NodeManagerProxy";
-constexpr const char *propObj = "/xyz/openbmc_project/Ipmi/NodeManagerProxy/";
+constexpr const char *nmdBus = "xyz.openbmc_project.NodeManagerProxy";
+constexpr const char *nmdObj = "/xyz/openbmc_project/NodeManagerProxy";
+constexpr const char *propObj = "/xyz/openbmc_project/NodeManagerProxy/";
 constexpr const char *nmdIntf = "org.openbmc.Readings";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
