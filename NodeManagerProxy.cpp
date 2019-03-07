@@ -120,112 +120,19 @@ int main(int argc, char *argv[])
 {
     conn->request_name(nmdBus);
 
-    std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
-        server.add_interface(nmdObj, ipmbIntf);
-
-    iface->initialize();
-
     // NM Statistics
     // Global power statistics
     configuredRequests.push_back(std::make_unique<GlobalPowerPlatform>(
-        server, "GlobalPowerPlatform", globalPowerStats, entirePlatform, 0));
+        server, 0, 255, "power", "Platform", globalPowerStats, entirePlatform,
+        0));
     configuredRequests.push_back(std::make_unique<GlobalPowerCpu>(
-        server, "GlobalPowerCpu", globalPowerStats, cpuSubsystem, 0));
+        server, 0, 255, "power", "CPU", globalPowerStats, cpuSubsystem, 0));
     configuredRequests.push_back(std::make_unique<GlobalPowerMemory>(
-        server, "GlobalPowerMemory", globalPowerStats, memorySubsystem, 0));
+        server, 0, 255, "power", "Memory", globalPowerStats, memorySubsystem,
+        0));
     configuredRequests.push_back(std::make_unique<GlobalPowerHwProtection>(
-        server, "GlobalPowerHwProtection", globalPowerStats, hwProtection, 0));
-    configuredRequests.push_back(std::make_unique<GlobalPowerIOsubsystem>(
-        server, "GlobalPowerIOsubsystem", globalPowerStats,
-        highPowerIOsubsystem, 0));
-
-    // Global inlet temperature statistics
-    configuredRequests.push_back(std::make_unique<GlobalInletTempPlatform>(
-        server, "GlobalInletTempPlatform", globalInletTempStats, entirePlatform,
+        server, 0, 255, "power", "HwProtection", globalPowerStats, hwProtection,
         0));
-    configuredRequests.push_back(std::make_unique<GlobalInletTempCpu>(
-        server, "GlobalInletTempCpu", globalInletTempStats, cpuSubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalInletTempMemory>(
-        server, "GlobalInletTempMemory", globalInletTempStats, memorySubsystem,
-        0));
-    configuredRequests.push_back(std::make_unique<GlobalInletTempHwProtection>(
-        server, "GlobalInletTempHwProtection", globalInletTempStats,
-        hwProtection, 0));
-    configuredRequests.push_back(std::make_unique<GlobalInletTempIOsubsystem>(
-        server, "GlobalInletTempIOsubsystem", globalInletTempStats,
-        highPowerIOsubsystem, 0));
-
-    // Global throttling statistics
-    configuredRequests.push_back(std::make_unique<GlobalThrottlingPlatform>(
-        server, "GlobalThrottlingPlatform", globalThrottlingStats,
-        entirePlatform, 0));
-    configuredRequests.push_back(std::make_unique<GlobalThrottlingCpu>(
-        server, "GlobalThrottlingCpu", globalThrottlingStats, cpuSubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalThrottlingMemory>(
-        server, "GlobalThrottlingMemory", globalThrottlingStats,
-        memorySubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalThrottlingHwProtection>(
-        server, "GlobalThrottlingHwProtection", globalThrottlingStats,
-        hwProtection, 0));
-    configuredRequests.push_back(std::make_unique<GlobalThrottlingIOsubsystem>(
-        server, "GlobalThrottlingIOsubsystem", globalThrottlingStats,
-        highPowerIOsubsystem, 0));
-
-    // Global volumetric airflow statistics
-    configuredRequests.push_back(std::make_unique<GlobalVolAirflowPlatform>(
-        server, "GlobalVolAirflowPlatform", globalVolAirflowStats,
-        entirePlatform, 0));
-    configuredRequests.push_back(std::make_unique<GlobalVolAirflowCpu>(
-        server, "GlobalVolAirflowCpu", globalVolAirflowStats, cpuSubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalVolAirflowMemory>(
-        server, "GlobalVolAirflowMemory", globalVolAirflowStats,
-        memorySubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalVolAirflowHwProtection>(
-        server, "GlobalVolAirflowHwProtection", globalVolAirflowStats,
-        hwProtection, 0));
-    configuredRequests.push_back(std::make_unique<GlobalVolAirflowIOsubsystem>(
-        server, "GlobalVolAirflowIOsubsystem", globalVolAirflowStats,
-        highPowerIOsubsystem, 0));
-
-    // Global outlet airflow temperature statistics
-    configuredRequests.push_back(
-        std::make_unique<GlobalOutletAirflowTempPlatform>(
-            server, "GlobalOutletAirflowTempPlatform",
-            globalOutletAirflowTempStats, entirePlatform, 0));
-    configuredRequests.push_back(std::make_unique<GlobalOutletAirflowTempCpu>(
-        server, "GlobalOutletAirflowTempCpu", globalOutletAirflowTempStats,
-        cpuSubsystem, 0));
-    configuredRequests.push_back(
-        std::make_unique<GlobalOutletAirflowTempMemory>(
-            server, "GlobalOutletAirflowTempMemory",
-            globalOutletAirflowTempStats, memorySubsystem, 0));
-    configuredRequests.push_back(
-        std::make_unique<GlobalOutletAirflowTempHwProtection>(
-            server, "GlobalOutletAirflowTempHwProtection",
-            globalOutletAirflowTempStats, hwProtection, 0));
-    configuredRequests.push_back(
-        std::make_unique<GlobalOutletAirflowTempIOsubsystem>(
-            server, "GlobalOutletAirflowTempIOsubsystem",
-            globalOutletAirflowTempStats, highPowerIOsubsystem, 0));
-
-    // Global chassis power statistics
-    configuredRequests.push_back(std::make_unique<GlobalChassisPowerPlatform>(
-        server, "GlobalChassisPowerPlatform", globalChassisPowerStats,
-        entirePlatform, 0));
-    configuredRequests.push_back(std::make_unique<GlobalChassisPowerCpu>(
-        server, "GlobalChassisPowerCpu", globalChassisPowerStats, cpuSubsystem,
-        0));
-    configuredRequests.push_back(std::make_unique<GlobalChassisPowerMemory>(
-        server, "GlobalChassisPowerMemory", globalChassisPowerStats,
-        memorySubsystem, 0));
-    configuredRequests.push_back(
-        std::make_unique<GlobalChassisPowerHwProtection>(
-            server, "GlobalChassisPowerHwProtection", globalChassisPowerStats,
-            hwProtection, 0));
-    configuredRequests.push_back(
-        std::make_unique<GlobalChassisPowerIOsubsystem>(
-            server, "GlobalChassisPowerIOsubsystem", globalChassisPowerStats,
-            highPowerIOsubsystem, 0));
 
     performReadings();
 

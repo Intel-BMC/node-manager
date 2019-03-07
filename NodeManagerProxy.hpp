@@ -24,13 +24,12 @@
  */
 constexpr const char *nmdBus = "xyz.openbmc_project.NodeManagerProxy";
 constexpr const char *nmdObj = "/xyz/openbmc_project/NodeManagerProxy";
-constexpr const char *propObj = "/xyz/openbmc_project/NodeManagerProxy/";
-constexpr const char *nmdIntf = "org.openbmc.Readings";
+constexpr const char *propObj = "/xyz/openbmc_project/sensors/";
+constexpr const char *nmdIntf = "xyz.openbmc_project.Sensor.Value";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
 constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
 constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
-
 /**
  * @brief NMd defines
  */
@@ -159,26 +158,17 @@ class getNmStatistics : public Request
     uint8_t domainId;
     uint8_t policyId;
 
-    getNmStatistics(sdbusplus::asio::object_server &server, std::string name,
+    getNmStatistics(sdbusplus::asio::object_server &server, double minValue,
+                    double maxValue, std::string type, std::string name,
                     uint8_t mode, uint8_t domainId, uint8_t policyId) :
         mode(mode),
         domainId(domainId), policyId(policyId)
     {
-        iface = server.add_interface(propObj + name, nmdIntf);
+        iface = server.add_interface(propObj + type + '/' + name, nmdIntf);
 
-        iface->register_property("Current", static_cast<uint16_t>(0));
-        iface->register_property("Minimum", static_cast<uint16_t>(0));
-        iface->register_property("Maximum", static_cast<uint16_t>(0));
-        iface->register_property("Average", static_cast<uint16_t>(0));
-        iface->register_property("TimeStamp", static_cast<uint32_t>(0));
-        iface->register_property("StatsReportPeriod", static_cast<uint32_t>(0));
-        iface->register_property("DomainId", static_cast<uint8_t>(0));
-        iface->register_property("PolicyGlobalState", static_cast<uint8_t>(0));
-        iface->register_property("PolicyOperationalState",
-                                 static_cast<uint8_t>(0));
-        iface->register_property("MeasurmentsState", static_cast<uint8_t>(0));
-        iface->register_property("PolicyActivationState",
-                                 static_cast<uint8_t>(0));
+        iface->register_property("MaxValue", static_cast<double>(maxValue));
+        iface->register_property("MinValue", static_cast<double>(minValue));
+        iface->register_property("Value", static_cast<uint16_t>(0));
 
         iface->initialize();
     }
@@ -202,22 +192,8 @@ class getNmStatistics : public Request
             reinterpret_cast<const nmIpmiGetNmStatisticsResp *>(
                 dataReceived.data());
 
-        iface->set_property("Current", getNmStatistics->data.stats.cur);
-        iface->set_property("Minimum", getNmStatistics->data.stats.min);
-        iface->set_property("Maximum", getNmStatistics->data.stats.max);
-        iface->set_property("Average", getNmStatistics->data.stats.avg);
-        iface->set_property("TimeStamp", getNmStatistics->timeStamp);
-        iface->set_property("StatsReportPeriod",
-                            getNmStatistics->statsReportPeriod);
-        iface->set_property("DomainId", getNmStatistics->domainId);
-        iface->set_property("PolicyGlobalState",
-                            getNmStatistics->policyGlobalState);
-        iface->set_property("PolicyOperationalState",
-                            getNmStatistics->policyOperationalState);
-        iface->set_property("MeasurmentsState",
-                            getNmStatistics->measurmentsState);
-        iface->set_property("PolicyActivationState",
-                            getNmStatistics->policyActivationState);
+        iface->set_property(
+            "Value", static_cast<uint16_t>(getNmStatistics->data.stats.cur));
     }
 
     void prepareRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
@@ -265,177 +241,6 @@ class GlobalPowerMemory : public getNmStatistics
 };
 
 class GlobalPowerHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalPowerIOsubsystem : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-/**
- * @brief Global inlet temperature statistics [Celsius]
- */
-class GlobalInletTempPlatform : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalInletTempCpu : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalInletTempMemory : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalInletTempHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalInletTempIOsubsystem : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-/**
- * @brief Global throttling statistics [%]
- */
-class GlobalThrottlingPlatform : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalThrottlingCpu : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalThrottlingMemory : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalThrottlingHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalThrottlingIOsubsystem : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-/**
- * @brief Global volumetric airflow statistics [1/10 of CFM]
- */
-class GlobalVolAirflowPlatform : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalVolAirflowCpu : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalVolAirflowMemory : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalVolAirflowHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalVolAirflowIOsubsystem : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-/**
- * @brief Global outlet airflow temperature statistics [Celsius]
- */
-class GlobalOutletAirflowTempPlatform : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalOutletAirflowTempCpu : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalOutletAirflowTempMemory : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalOutletAirflowTempHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalOutletAirflowTempIOsubsystem : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-/**
- * @brief Global outlet airflow temperature statistics [Celsius]
- */
-class GlobalChassisPowerPlatform : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalChassisPowerCpu : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalChassisPowerMemory : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalChassisPowerHwProtection : public getNmStatistics
-{
-  public:
-    using getNmStatistics::getNmStatistics;
-};
-
-class GlobalChassisPowerIOsubsystem : public getNmStatistics
 {
   public:
     using getNmStatistics::getNmStatistics;
