@@ -236,7 +236,7 @@ GpioState::GpioState(const std::string& name_, const uint64_t& number_,
                              : static_cast<bool>(gpio.getValue()));
         });
 
-    iface->initialize();
+    iface->initialize(true);
 
     // TODO: implement gpio device character access in gpioutils.cpp
     // and make use of gpioutils file to read directly
