@@ -92,10 +92,9 @@ void GpioManager::addObject(const std::string& path)
                     server.add_interface(gpioPath + gpioName, gpioInterface);
 
                 // Monitor gpio value changes
-                gpioMonitorList.emplace(
-                    gpioName,
-                    std::make_unique<GpioState>(gpioName, index, inverted,
-                                                false, direction, io, iface));
+                gpioMonitorList.emplace(gpioName, std::make_unique<GpioState>(
+                                                      gpioName, index, inverted,
+                                                      direction, io, iface));
             }
         },
         entityMgrService, path, propInterface, "GetAll", gpioConfigInterface);
@@ -142,15 +141,13 @@ GpioManager::GpioManager(boost::asio::io_service& io_,
         std::vector<std::string>());
 }
 
-GpioState::GpioState(const std::string& name_, const uint16_t number_,
-                     const bool inverted_, const bool enabled_,
-                     const std::string& direction_,
+GpioState::GpioState(const std::string& name_, const uint64_t& number_,
+                     const bool inverted_, const std::string& direction_,
                      boost::asio::io_service& io_,
                      std::shared_ptr<sdbusplus::asio::dbus_interface>& iface_) :
     name(name_),
-    number(number_), inverted(inverted_), enabled(enabled_),
-    direction(direction_), inputDev(io_), iface(iface_),
-    gpio(std::to_string(number_))
+    number(number_), inverted(inverted_), direction(direction_), inputDev(io_),
+    iface(iface_), gpio(std::to_string(number_))
 {
 
     // Initialize gpio direction as specified by entity-manager
@@ -165,8 +162,6 @@ GpioState::GpioState(const std::string& name_, const uint16_t number_,
         "Ignore", ignore,
         // Override set
         [this](const bool& req, bool& propertyValue) {
-            // If Gpio enabled property is set as true then
-            // handle the request
             if (ignore != req)
             {
                 ignore = req;
@@ -181,9 +176,7 @@ GpioState::GpioState(const std::string& name_, const uint16_t number_,
         "Direction", direction,
         // Override set
         [this](const std::string& req, std::string& propertyValue) {
-            // If Gpio enabled property is set as true then
-            // handle the request
-            if (!ignore && enabled && direction != req)
+            if (!ignore && direction != req)
             {
                 direction = req;
                 this->gpio.setDirection(req);
@@ -202,22 +195,6 @@ GpioState::GpioState(const std::string& name_, const uint16_t number_,
             return direction;
         });
 
-    // TODO: Determine whether we require this one? ignore should be fine
-    // Decide and remove the same
-
-    // Enabled is used to control the set property of Value & direction
-    iface->register_property(
-        "Enabled", enabled,
-        [this](const bool& req, bool& propertyValue) {
-            if (!ignore && enabled != req)
-            {
-                enabled = req;
-                propertyValue = req;
-                return 1;
-            }
-            return 0;
-        },
-        [this](const bool& propertyValue) { return enabled; });
     value = static_cast<bool>(gpio.getValue());
     if (inverted)
     {
@@ -227,21 +204,20 @@ GpioState::GpioState(const std::string& name_, const uint16_t number_,
         "Value", value,
         // Override set
         [this](const bool& req, bool& propertyValue) {
-            if ((!ignore && enabled && this->gpio.getDirection() == "out") ||
-                internalSet)
+            if ((!ignore && gpio.getDirection() == "out") || internalSet)
             {
                 bool setVal = req;
-                if (inverted)
-                {
-                    setVal = !setVal;
-                }
                 if (value != setVal)
                 {
                     value = setVal;
                     propertyValue = setVal;
                     if (!internalSet)
                     {
-                        this->gpio.setValue(static_cast<GpioValue>(setVal));
+                        if (inverted)
+                        {
+                            setVal = !setVal;
+                        }
+                        gpio.setValue(static_cast<GpioValue>(setVal));
                     }
                     return 1;
                 }
@@ -250,6 +226,15 @@ GpioState::GpioState(const std::string& name_, const uint16_t number_,
         },
         // Override get
         [this](const bool& propertyValue) { return value; });
+    iface->register_property(
+        "SampledValue", value,
+        // Override set - ignore set
+        [this](const bool& req, bool& propertyValue) { return 0; },
+        // Override get
+        [this](const bool& propertyValue) {
+            return (inverted ? !static_cast<bool>(gpio.getValue())
+                             : static_cast<bool>(gpio.getValue()));
+        });
 
     iface->initialize();
 
@@ -323,7 +308,7 @@ void GpioState::readValue(void)
     bool state = std::stoi(readBuf);
     internalSet = true;
     // Update the property value
-    iface->set_property("Value", state);
+    iface->set_property("Value", inverted ? !state : state);
     internalSet = false;
 }
 

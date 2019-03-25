@@ -25,9 +25,8 @@
 class GpioState
 {
     const std::string name;
-    uint16_t number;
+    uint64_t number;
     const bool inverted;
-    bool enabled;
     bool value;
     std::string direction;
     bool ignore = false;
@@ -41,9 +40,9 @@ class GpioState
     void readValue(void);
 
   public:
-    GpioState(const std::string& name_, const uint16_t number_,
-              const bool inverted_, const bool enabled_,
-              const std::string& direction_, boost::asio::io_service& io_,
+    GpioState(const std::string& name_, const uint64_t& number_,
+              const bool inverted_, const std::string& direction_,
+              boost::asio::io_service& io_,
               std::shared_ptr<sdbusplus::asio::dbus_interface>& iface_);
     ~GpioState();
     Gpio gpio;
