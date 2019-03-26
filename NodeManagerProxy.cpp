@@ -15,6 +15,7 @@
 
 #include "NodeManagerProxy.hpp"
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/asio.hpp>
 #include <tuple>
 #include <unordered_map>
@@ -28,7 +29,7 @@ static boost::asio::steady_timer framesDistributingTimer(io);
 static sdbusplus::asio::object_server server =
     sdbusplus::asio::object_server(conn);
 
-static std::vector<std::unique_ptr<Request>> configuredRequests;
+static std::vector<std::unique_ptr<Request>> configuredSensors;
 
 /**
  * @brief Function distributing requests in time (burst prevention)
@@ -47,7 +48,7 @@ void processRequests(
                 return;
             }
 
-            if (requestIter == configuredRequests.end())
+            if (requestIter == configuredSensors.end())
             {
                 return;
             }
@@ -107,10 +108,70 @@ void performReadings()
             return;
         }
 
-        processRequests(configuredRequests.begin());
+        processRequests(configuredSensors.begin());
 
         performReadings();
     });
+}
+
+void createSensors()
+{
+    // NM Statistics
+    // Global power statistics
+    configuredSensors.push_back(std::make_unique<GlobalPowerPlatform>(
+        server, 0, 2040, "power", "Platform_PWR", globalPowerStats,
+        entirePlatform, 0));
+    configuredSensors.push_back(std::make_unique<GlobalPowerCpu>(
+        server, 0, 510, "power", "CPU_PWR", globalPowerStats, cpuSubsystem, 0));
+    configuredSensors.push_back(std::make_unique<GlobalPowerMemory>(
+        server, 0, 255, "power", "Memory_PWR", globalPowerStats,
+        memorySubsystem, 0));
+}
+
+void createAssociations()
+{
+    using GetSubTreeType = std::vector<std::pair<
+        std::string,
+        std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+    constexpr int32_t scanDepth = 0;
+    std::vector<std::string> confPath{sensorConfPath};
+
+    conn->async_method_call(
+        [](boost::system::error_code ec, GetSubTreeType &subtree) {
+            if (ec)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "createAssociations: error async_method_call to "
+                    "ObjectMapper");
+                return;
+            }
+
+            if (subtree.empty())
+            {
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                    "createAssociations: Object Mapper returned empty subtree");
+                return;
+            }
+
+            if (!boost::algorithm::ends_with(subtree.front().first,
+                                             std::string(sensorName)))
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "createAssociations: could not get configuration path for "
+                    "sensor name");
+                return;
+            }
+
+            // Create associations for all configured sensors
+            for (auto &sensor : configuredSensors)
+            {
+                sensor->createAssociation(server, subtree.front().first);
+            }
+        },
+        "xyz.openbmc_project.ObjectMapper",
+        "/xyz/openbmc_project/object_mapper",
+        "xyz.openbmc_project.ObjectMapper", "GetSubTree",
+        "/xyz/openbmc_project/inventory/system", scanDepth, confPath);
 }
 
 /**
@@ -119,24 +180,17 @@ void performReadings()
 int main(int argc, char *argv[])
 {
     conn->request_name(nmdBus);
-
-    // NM Statistics
-    // Global power statistics
-    configuredRequests.push_back(std::make_unique<GlobalPowerPlatform>(
-        server, 0, 255, "power", "Platform", globalPowerStats, entirePlatform,
-        0));
-    configuredRequests.push_back(std::make_unique<GlobalPowerCpu>(
-        server, 0, 255, "power", "CPU", globalPowerStats, cpuSubsystem, 0));
-    configuredRequests.push_back(std::make_unique<GlobalPowerMemory>(
-        server, 0, 255, "power", "Memory", globalPowerStats, memorySubsystem,
-        0));
-    configuredRequests.push_back(std::make_unique<GlobalPowerHwProtection>(
-        server, 0, 255, "power", "HwProtection", globalPowerStats, hwProtection,
-        0));
-
+    createSensors();
+    createAssociations();
     performReadings();
 
-    io.run();
+    static auto match = std::make_unique<sdbusplus::bus::match::match>(
+        static_cast<sdbusplus::bus::bus &>(*conn),
+        "type='signal',member='PropertiesChanged',"
+        "arg0namespace='" +
+            std::string(sensorConfPath) + "'",
+        [](sdbusplus::message::message &message) { createAssociations(); });
 
+    io.run();
     return 0;
 }

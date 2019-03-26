@@ -30,6 +30,10 @@ constexpr const char *nmdIntf = "xyz.openbmc_project.Sensor.Value";
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
 constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
 constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
+
+constexpr const char *sensorConfPath =
+    "xyz.openbmc_project.Configuration.NMSensor";
+constexpr const char *sensorName = "Node_Manager_Sensor";
 /**
  * @brief NMd defines
  */
@@ -143,26 +147,26 @@ class Request
     virtual void handleResponse(const uint8_t completionCode,
                                 const std::vector<uint8_t> &dataReceived) = 0;
 
+    virtual void createAssociation(sdbusplus::asio::object_server &server,
+                                   std::string &path) = 0;
+
     virtual ~Request(){};
 
   protected:
     Request(){};
 
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> association;
 };
 
 class getNmStatistics : public Request
 {
   public:
-    uint8_t mode;
-    uint8_t domainId;
-    uint8_t policyId;
-
     getNmStatistics(sdbusplus::asio::object_server &server, double minValue,
                     double maxValue, std::string type, std::string name,
                     uint8_t mode, uint8_t domainId, uint8_t policyId) :
         mode(mode),
-        domainId(domainId), policyId(policyId)
+        domainId(domainId), policyId(policyId), type(type), name(name)
     {
         iface = server.add_interface(propObj + type + '/' + name, nmdIntf);
 
@@ -171,6 +175,24 @@ class getNmStatistics : public Request
         iface->register_property("Value", static_cast<uint16_t>(0));
 
         iface->initialize();
+    }
+
+    void createAssociation(sdbusplus::asio::object_server &server,
+                           std::string &path)
+    {
+        if (!association)
+        {
+            using Association =
+                std::tuple<std::string, std::string, std::string>;
+            std::vector<Association> associations;
+            associations.push_back(Association("inventory", "sensors", path));
+            association = server.add_interface("/xyz/openbmc_project/sensors/" +
+                                                   type + "/" + name,
+                                               "org.openbmc.Associations");
+
+            association->register_property("associations", associations);
+            association->initialize();
+        }
     }
 
     void handleResponse(const uint8_t completionCode,
@@ -217,6 +239,13 @@ class getNmStatistics : public Request
         nmGetStatistics->perComponent = 0;
         nmGetStatistics->policyId = policyId;
     }
+
+  private:
+    uint8_t mode;
+    uint8_t domainId;
+    uint8_t policyId;
+    std::string type;
+    std::string name;
 };
 
 /**
