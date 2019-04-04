@@ -70,15 +70,35 @@ void GpioManager::addObject(const std::string& path)
                 std::string gpioName =
                     sdbusplus::message::variant_ns::get<std::string>(
                         nameFind->second);
-                bool inverted =
+                bool inverted = boost::iequals(
                     sdbusplus::message::variant_ns::get<std::string>(
-                        polarityFind->second) == "Low";
+                        polarityFind->second),
+                    "Low");
                 std::string direction =
                     sdbusplus::message::variant_ns::get<std::string>(
                         directionFind->second);
 
                 boost::replace_all(gpioName, " ", "_");
-                boost::algorithm::to_lower(direction);
+
+                if (boost::iequals(direction, "Input"))
+                {
+                    direction = "in";
+                }
+                else if (boost::iequals(direction, "Out") ||
+                         boost::iequals(direction, "Both"))
+                {
+                    direction = "out";
+                }
+                else
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "ERROR Illegal direction for GPIO",
+                        phosphor::logging::entry("GPIO_NAME=%s",
+                                                 gpioName.c_str()),
+                        phosphor::logging::entry("DIRECTION=%s",
+                                                 direction.c_str()));
+                }
+
                 if (gpioMonitorList.find(gpioName) != gpioMonitorList.end())
                 {
                     phosphor::logging::log<phosphor::logging::level::ERR>(
@@ -176,13 +196,16 @@ GpioState::GpioState(const std::string& name_, const uint64_t& number_,
         "Direction", direction,
         // Override set
         [this](const std::string& req, std::string& propertyValue) {
-            if (!ignore && direction != req)
+            if (req == "in" || req == "out")
             {
-                direction = req;
-                this->gpio.setDirection(req);
+                if (!ignore && direction != req)
+                {
+                    direction = req;
+                    this->gpio.setDirection(req);
 
-                propertyValue = req;
-                return 1;
+                    propertyValue = req;
+                    return 1;
+                }
             }
             return 0;
         },
@@ -337,8 +360,6 @@ int main()
             {
                 if (gpioConfigInterface == objectInterfaces.first)
                 {
-                    phosphor::logging::log<phosphor::logging::level::INFO>(
-                        "New configuration detected. Updating gpiodaemon.");
                     gpioMgr.addObject(objectPath.str);
                 }
             }
