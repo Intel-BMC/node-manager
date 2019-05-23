@@ -11,4 +11,4 @@ Type=dbus
 BusName=xyz.openbmc_project.Control.Service.Manager
 
 [Install]
-#WantedBy=basic.target
+WantedBy=multi-user.target

@@ -15,11 +15,13 @@
 */
 #include <fstream>
 #include <regex>
+#include <boost/asio/spawn.hpp>
 #include "srvcfg_manager.hpp"
 
 extern std::shared_ptr<boost::asio::deadline_timer> timer;
 extern std::map<std::string, std::shared_ptr<phosphor::service::ServiceConfig>>
     srvMgrObjects;
+static bool updateInProgress = false;
 
 namespace phosphor
 {
@@ -34,207 +36,231 @@ static constexpr const char *systemd1UnitBasePath =
 static constexpr const char *systemdOverrideUnitBasePath =
     "/etc/systemd/system/";
 
-void ServiceConfig::syncWithSystemD1Properties()
+void ServiceConfig::updateSocketProperties(
+    const boost::container::flat_map<std::string, VariantType> &propertyMap)
 {
-    // Read systemd1 socket/service property and load.
+    auto listenIt = propertyMap.find("Listen");
+    if (listenIt != propertyMap.end())
+    {
+        auto listenVal =
+            std::get<std::vector<std::tuple<std::string, std::string>>>(
+                listenIt->second);
+        if (listenVal.size())
+        {
+            protocol = std::get<0>(listenVal[0]);
+            std::string port = std::get<1>(listenVal[0]);
+            auto tmp = std::stoul(port.substr(port.find_last_of(":") + 1),
+                                  nullptr, 10);
+            if (tmp > std::numeric_limits<uint16_t>::max())
+            {
+                throw std::out_of_range("Out of range");
+            }
+            portNum = tmp;
+            if (iface && iface->is_initialized())
+            {
+                internalSet = true;
+                iface->set_property(srvCfgPropPort, portNum);
+                internalSet = false;
+            }
+        }
+    }
+}
+
+void ServiceConfig::updateServiceProperties(
+    const boost::container::flat_map<std::string, VariantType> &propertyMap)
+{
+    auto stateIt = propertyMap.find("UnitFileState");
+    if (stateIt != propertyMap.end())
+    {
+        stateValue = std::get<std::string>(stateIt->second);
+        unitEnabledState = unitMaskedState = false;
+        if (stateValue == stateMasked)
+        {
+            unitMaskedState = true;
+        }
+        else if (stateValue == stateEnabled)
+        {
+            unitEnabledState = true;
+        }
+        if (iface && iface->is_initialized())
+        {
+            internalSet = true;
+            iface->set_property(srvCfgPropMasked, unitMaskedState);
+            iface->set_property(srvCfgPropEnabled, unitEnabledState);
+            internalSet = false;
+        }
+    }
+    auto subStateIt = propertyMap.find("SubState");
+    if (subStateIt != propertyMap.end())
+    {
+        subStateValue = std::get<std::string>(subStateIt->second);
+        if (subStateValue == subStateRunning)
+        {
+            unitRunningState = true;
+        }
+        if (iface && iface->is_initialized())
+        {
+            internalSet = true;
+            iface->set_property(srvCfgPropRunning, unitRunningState);
+            internalSet = false;
+        }
+    }
+}
+
+void ServiceConfig::queryAndUpdateProperties()
+{
     conn->async_method_call(
         [this](boost::system::error_code ec,
-               const sdbusplus::message::variant<
-                   std::vector<std::tuple<std::string, std::string>>> &value) {
+               const boost::container::flat_map<std::string, VariantType>
+                   &propertyMap) {
             if (ec)
             {
                 phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "async_method_call error: Failed to get property");
+                    "async_method_call error: Failed to service unit "
+                    "properties");
                 return;
             }
-
             try
             {
-                auto listenVal = sdbusplus::message::variant_ns::get<
-                    std::vector<std::tuple<std::string, std::string>>>(value);
-                protocol = std::get<0>(listenVal[0]);
-                std::string port = std::get<1>(listenVal[0]);
-                auto tmp = std::stoul(port.substr(port.find_last_of(":") + 1),
-                                      nullptr, 10);
-                if (tmp > std::numeric_limits<uint16_t>::max())
+                updateServiceProperties(propertyMap);
+                if (!socketObjectPath.empty())
                 {
-                    throw std::out_of_range("Out of range");
+                    conn->async_method_call(
+                        [this](boost::system::error_code ec,
+                               const boost::container::flat_map<
+                                   std::string, VariantType> &propertyMap) {
+                            if (ec)
+                            {
+                                phosphor::logging::log<
+                                    phosphor::logging::level::ERR>(
+                                    "async_method_call error: Failed to get "
+                                    "all property");
+                                return;
+                            }
+                            try
+                            {
+                                updateSocketProperties(propertyMap);
+                                if (!iface)
+                                {
+                                    registerProperties();
+                                }
+                            }
+                            catch (const std::exception &e)
+                            {
+                                phosphor::logging::log<
+                                    phosphor::logging::level::ERR>(
+                                    "Exception in getting socket properties",
+                                    phosphor::logging::entry("WHAT=%s",
+                                                             e.what()));
+                                return;
+                            }
+                        },
+                        sysdService, socketObjectPath, dBusPropIntf,
+                        dBusGetAllMethod, sysdSocketIntf);
                 }
-                portNum = tmp;
+                else if (!iface)
+                {
+                    registerProperties();
+                }
             }
             catch (const std::exception &e)
             {
                 phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "Exception for port number",
+                    "Exception in getting socket properties",
                     phosphor::logging::entry("WHAT=%s", e.what()));
                 return;
             }
-            conn->async_method_call(
-                [](boost::system::error_code ec) {
-                    if (ec)
-                    {
-                        phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "async_method_call error: Failed to set property");
-                        return;
-                    }
-                },
-                serviceConfigSrvName, objPath.c_str(),
-                "org.freedesktop.DBus.Properties", "Set", serviceConfigIntfName,
-                "Port", sdbusplus::message::variant<uint16_t>(portNum));
         },
-        "org.freedesktop.systemd1", sysDSockObjPath.c_str(),
-        "org.freedesktop.DBus.Properties", "Get",
-        "org.freedesktop.systemd1.Socket", "Listen");
-
-    conn->async_method_call(
-        [this](boost::system::error_code ec,
-               const sdbusplus::message::variant<std::string> &pValue) {
-            if (ec)
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "async_method_call error: Failed to get property");
-                return;
-            }
-
-            channelList.clear();
-            std::istringstream stm(
-                sdbusplus::message::variant_ns::get<std::string>(pValue));
-            std::string token;
-            while (std::getline(stm, token, ','))
-            {
-                channelList.push_back(token);
-            }
-            conn->async_method_call(
-                [](boost::system::error_code ec) {
-                    if (ec)
-                    {
-                        phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "async_method_call error: Failed to set property");
-                        return;
-                    }
-                },
-                serviceConfigSrvName, objPath.c_str(),
-                "org.freedesktop.DBus.Properties", "Set", serviceConfigIntfName,
-                "Channel",
-                sdbusplus::message::variant<std::vector<std::string>>(
-                    channelList));
-        },
-        "org.freedesktop.systemd1", sysDSockObjPath.c_str(),
-        "org.freedesktop.DBus.Properties", "Get",
-        "org.freedesktop.systemd1.Socket", "BindToDevice");
-
-    std::string srvUnitName(sysDUnitName);
-    if (srvUnitName == "dropbear")
-    {
-        // Dropbear service expects template arguments.
-        srvUnitName.append("@");
-    }
-    srvUnitName.append(".service");
-    conn->async_method_call(
-        [this](boost::system::error_code ec, const std::string &pValue) {
-            if (ec)
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "async_method_call error: Failed to get property");
-                return;
-            }
-            if ((pValue == "enabled") || (pValue == "static") ||
-                (pValue == "unmasked"))
-            {
-                stateValue = "enabled";
-            }
-            else if ((pValue == "disabled") || (pValue == "masked"))
-            {
-                stateValue = "disabled";
-            }
-            conn->async_method_call(
-                [](boost::system::error_code ec) {
-                    if (ec)
-                    {
-                        phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "async_method_call error: Failed to set property");
-                        return;
-                    }
-                },
-                serviceConfigSrvName, objPath.c_str(),
-                "org.freedesktop.DBus.Properties", "Set", serviceConfigIntfName,
-                "State", sdbusplus::message::variant<std::string>(stateValue));
-        },
-        "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-        "org.freedesktop.systemd1.Manager", "GetUnitFileState", srvUnitName);
-
+        sysdService, serviceObjectPath, dBusPropIntf, dBusGetAllMethod,
+        sysdUnitIntf);
     return;
+}
+
+void ServiceConfig::createSocketOverrideConf()
+{
+    if (!socketObjectPath.empty())
+    {
+        std::string socketUnitName(instantiatedUnitName + ".socket");
+        /// Check override socket directory exist, if not create it.
+        std::experimental::filesystem::path ovrUnitFileDir(
+            systemdOverrideUnitBasePath);
+        ovrUnitFileDir += socketUnitName;
+        ovrUnitFileDir += ".d";
+        if (!std::experimental::filesystem::exists(ovrUnitFileDir))
+        {
+            if (!std::experimental::filesystem::create_directories(
+                    ovrUnitFileDir))
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "Unable to create the directory.",
+                    phosphor::logging::entry("DIR=%s", ovrUnitFileDir.c_str()));
+                phosphor::logging::elog<sdbusplus::xyz::openbmc_project::
+                                            Common::Error::InternalFailure>();
+            }
+        }
+        overrideConfDir = std::string(ovrUnitFileDir);
+    }
 }
 
 ServiceConfig::ServiceConfig(
     sdbusplus::asio::object_server &srv_,
-    std::shared_ptr<sdbusplus::asio::connection> &conn_, std::string objPath_,
-    std::string unitName) :
+    std::shared_ptr<sdbusplus::asio::connection> &conn_,
+    const std::string &objPath_, const std::string &baseUnitName_,
+    const std::string &instanceName_, const std::string &serviceObjPath_,
+    const std::string &socketObjPath_) :
     server(srv_),
-    conn(conn_), objPath(objPath_), sysDUnitName(unitName)
+    conn(conn_), objPath(objPath_), baseUnitName(baseUnitName_),
+    instanceName(instanceName_), serviceObjectPath(serviceObjPath_),
+    socketObjectPath(socketObjPath_)
 {
-    std::string socketUnitName(sysDUnitName + ".socket");
-    // .socket systemd service files are handled.
-    // Regular .service only files are ignored.
-    if (!checkSystemdUnitExist(socketUnitName))
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Unit doesn't exist.",
-            phosphor::logging::entry("UNITNAME=%s", socketUnitName.c_str()));
-        phosphor::logging::elog<
-            sdbusplus::xyz::openbmc_project::Common::Error::InternalFailure>();
-    }
-
-    /// Check override socket directory exist, if not create it.
-    std::experimental::filesystem::path ovrUnitFileDir(
-        systemdOverrideUnitBasePath);
-    ovrUnitFileDir += socketUnitName;
-    ovrUnitFileDir += ".d";
-    if (!std::experimental::filesystem::exists(ovrUnitFileDir))
-    {
-        if (!std::experimental::filesystem::create_directories(ovrUnitFileDir))
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Unable to create the directory.",
-                phosphor::logging::entry("DIR=%s", ovrUnitFileDir.c_str()));
-            phosphor::logging::elog<sdbusplus::xyz::openbmc_project::Common::
-                                        Error::InternalFailure>();
-        }
-    }
-
-    /* Store require info locally */
-    unitSocketFilePath = std::string(ovrUnitFileDir);
-
-    sysDSockObjPath = systemd1UnitBasePath;
-    sysDSockObjPath.append(
-        std::regex_replace(sysDUnitName, std::regex("-"), "_2d"));
-    sysDSockObjPath.append("_2esocket");
-
-    // Adds interface, object and Properties....
-    registerProperties();
-
-    syncWithSystemD1Properties();
-
+    instantiatedUnitName = baseUnitName + addInstanceName(instanceName, "@");
     updatedFlag = 0;
+    queryAndUpdateProperties();
     return;
 }
 
-void ServiceConfig::applySystemDServiceConfig()
+std::string ServiceConfig::getSocketUnitName()
 {
-    if (updatedFlag)
+    return instantiatedUnitName + ".socket";
+}
+
+std::string ServiceConfig::getServiceUnitName()
+{
+    return instantiatedUnitName + ".service";
+}
+
+bool ServiceConfig::isMaskedOut()
+{
+    // return true  if state is masked & no request to update the maskedState
+    return (
+        stateValue == "masked" &&
+        !(updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::maskedState))));
+}
+
+void ServiceConfig::stopAndApplyUnitConfig(boost::asio::yield_context yield)
+{
+    if (!updatedFlag || isMaskedOut())
     {
-        // No updates. Just return.
+        // No updates / masked - Just return.
         return;
     }
-
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Applying new settings.",
         phosphor::logging::entry("OBJPATH=%s", objPath.c_str()));
-    if (updatedFlag & ((1 << static_cast<uint8_t>(UpdatedProp::channel)) |
-                       (1 << static_cast<uint8_t>(UpdatedProp::port))))
+    if (subStateValue == "running")
     {
+        if (!socketObjectPath.empty())
+        {
+            systemdUnitAction(conn, yield, getSocketUnitName(), sysdStopUnit);
+        }
+        systemdUnitAction(conn, yield, getServiceUnitName(), sysdStopUnit);
+    }
+
+    if (updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::port)))
+    {
+        createSocketOverrideConf();
         // Create override config file and write data.
-        std::string ovrCfgFile{unitSocketFilePath + "/" + overrideConfFileName};
+        std::string ovrCfgFile{overrideConfDir + "/" + overrideConfFileName};
         std::string tmpFile{ovrCfgFile + "_tmp"};
         std::ofstream cfgFile(tmpFile, std::ios::out);
         if (!cfgFile.good())
@@ -251,21 +277,6 @@ void ServiceConfig::applySystemDServiceConfig()
         cfgFile << "Listen" << protocol << "="
                 << "\n";
         cfgFile << "Listen" << protocol << "=" << portNum << "\n";
-        // BindToDevice
-        bool firstElement = true;
-        cfgFile << "BindToDevice=";
-        for (const auto &it : channelList)
-        {
-            if (firstElement)
-            {
-                cfgFile << it;
-                firstElement = false;
-            }
-            else
-            {
-                cfgFile << "," << it;
-            }
-        }
         cfgFile.close();
 
         if (std::rename(tmpFile.c_str(), ovrCfgFile.c_str()) != 0)
@@ -278,55 +289,49 @@ void ServiceConfig::applySystemDServiceConfig()
         }
     }
 
-    std::string socketUnitName(sysDUnitName + ".socket");
-    std::string srvUnitName(sysDUnitName);
-    if (srvUnitName == "dropbear")
+    if (updatedFlag & ((1 << static_cast<uint8_t>(UpdatedProp::maskedState)) |
+                       (1 << static_cast<uint8_t>(UpdatedProp::enabledState))))
     {
-        // Dropbear service expects template arguments.
-        // Todo: Unit action for service, fails with error
-        // "missing the instance name". Needs to implement
-        // getting all running instances and use it. This
-        // impact runtime but works fine during reboot.
-        srvUnitName.append("@");
+        std::vector<std::string> unitFiles;
+        if (socketObjectPath.empty())
+        {
+            unitFiles = {getServiceUnitName()};
+        }
+        else
+        {
+            unitFiles = {getSocketUnitName(), getServiceUnitName()};
+        }
+        systemdUnitFilesStateChange(conn, yield, unitFiles, stateValue,
+                                    unitMaskedState, unitEnabledState);
     }
-    srvUnitName.append(".service");
-    // Stop the running service in below scenarios.
-    // 1. State changed from "enabled" to "disabled"
-    // 2. No change in state and existing stateValue is
-    //    "enabled" and there is change in other properties.
-    if (((stateValue == "disabled") &&
-         (updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state)))) ||
-        (!(updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state))) &&
-         (stateValue == "enabled") && (updatedFlag)))
+    return;
+}
+void ServiceConfig::restartUnitConfig(boost::asio::yield_context yield)
+{
+    if (!updatedFlag || isMaskedOut())
     {
-        systemdUnitAction(conn, socketUnitName, "StopUnit");
-        systemdUnitAction(conn, srvUnitName, "StopUnit");
-    }
-
-    if (updatedFlag & (1 << static_cast<uint8_t>(UpdatedProp::state)))
-    {
-        std::vector<std::string> unitFiles = {socketUnitName, srvUnitName};
-        systemdUnitFilesStateChange(conn, unitFiles, stateValue);
+        // No updates. Just return.
+        return;
     }
 
-    // Perform daemon reload to read new settings
-    systemdDaemonReload(conn);
-
-    if (stateValue == "enabled")
+    if (unitRunningState)
     {
-        // Restart the socket
-        systemdUnitAction(conn, socketUnitName, "StartUnit");
+        if (!socketObjectPath.empty())
+        {
+            systemdUnitAction(conn, yield, getSocketUnitName(),
+                              sysdRestartUnit);
+        }
+        systemdUnitAction(conn, yield, getServiceUnitName(), sysdRestartUnit);
     }
 
     // Reset the flag
     updatedFlag = 0;
 
-    // All done. Lets reload the properties which are applied on systemd1.
-    // TODO: We need to capture the service restart signal and reload data
-    // inside the signal handler. So that we can update the service
-    // properties modified, outside of this service as well.
-    syncWithSystemD1Properties();
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "Applied new settings",
+        phosphor::logging::entry("OBJPATH=%s", objPath.c_str()));
 
+    queryAndUpdateProperties();
     return;
 }
 
@@ -345,67 +350,144 @@ void ServiceConfig::startServiceRestartTimer()
                 "async wait error.");
             return;
         }
-        for (auto &srvMgrObj : srvMgrObjects)
-        {
-            auto &srvObj = srvMgrObj.second;
-            if (srvObj->updatedFlag)
-            {
-                srvObj->applySystemDServiceConfig();
-            }
-        }
+        updateInProgress = true;
+        boost::asio::spawn(conn->get_io_context(),
+                           [this](boost::asio::yield_context yield) {
+                               // Stop and apply configuration for all objects
+                               for (auto &srvMgrObj : srvMgrObjects)
+                               {
+                                   auto &srvObj = srvMgrObj.second;
+                                   if (srvObj->updatedFlag)
+                                   {
+                                       srvObj->stopAndApplyUnitConfig(yield);
+                                   }
+                               }
+                               // Do system reload
+                               systemdDaemonReload(conn, yield);
+                               // restart unit config.
+                               for (auto &srvMgrObj : srvMgrObjects)
+                               {
+                                   auto &srvObj = srvMgrObj.second;
+                                   if (srvObj->updatedFlag)
+                                   {
+                                       srvObj->restartUnitConfig(yield);
+                                   }
+                               }
+                               updateInProgress = false;
+                           });
     });
 }
 
 void ServiceConfig::registerProperties()
 {
-    std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
-        server.add_interface(objPath, serviceConfigIntfName);
+    iface = server.add_interface(objPath, serviceConfigIntfName);
+
+    if (!socketObjectPath.empty())
+    {
+        iface->register_property(
+            srvCfgPropPort, portNum,
+            [this](const uint16_t &req, uint16_t &res) {
+                if (!internalSet)
+                {
+                    if (req == res)
+                    {
+                        return 1;
+                    }
+                    if (updateInProgress)
+                    {
+                        return 0;
+                    }
+                    portNum = req;
+                    updatedFlag |=
+                        (1 << static_cast<uint8_t>(UpdatedProp::port));
+                    startServiceRestartTimer();
+                }
+                res = req;
+                return 1;
+            });
+    }
 
     iface->register_property(
-        "Port", portNum, [this](const uint16_t &req, uint16_t &res) {
-            if (req == res)
+        srvCfgPropMasked, unitMaskedState, [this](const bool &req, bool &res) {
+            if (!internalSet)
             {
-                return 1;
+                if (req == res)
+                {
+                    return 1;
+                }
+                if (updateInProgress)
+                {
+                    return 0;
+                }
+                unitMaskedState = req;
+                unitEnabledState = !unitMaskedState;
+                unitRunningState = !unitMaskedState;
+                updatedFlag |=
+                    (1 << static_cast<uint8_t>(UpdatedProp::maskedState)) |
+                    (1 << static_cast<uint8_t>(UpdatedProp::enabledState)) |
+                    (1 << static_cast<uint8_t>(UpdatedProp::runningState));
+                internalSet = true;
+                iface->set_property(srvCfgPropEnabled, unitEnabledState);
+                iface->set_property(srvCfgPropRunning, unitRunningState);
+                internalSet = false;
+                startServiceRestartTimer();
             }
-            portNum = req;
-            updatedFlag |= (1 << static_cast<uint8_t>(UpdatedProp::port));
-            startServiceRestartTimer();
             res = req;
             return 1;
         });
 
     iface->register_property(
-        "Channel", channelList,
-        [this](const std::vector<std::string> &req,
-               std::vector<std::string> &res) {
-            if (req == res)
+        srvCfgPropEnabled, unitEnabledState,
+        [this](const bool &req, bool &res) {
+            if (!internalSet)
             {
-                return 1;
+                if (req == res)
+                {
+                    return 1;
+                }
+                if (updateInProgress)
+                {
+                    return 0;
+                }
+                if (unitMaskedState)
+                { // block updating if masked
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Invalid value specified");
+                    return -EINVAL;
+                }
+                unitEnabledState = req;
+                updatedFlag |=
+                    (1 << static_cast<uint8_t>(UpdatedProp::enabledState));
+                startServiceRestartTimer();
             }
-            channelList.clear();
-            std::copy(req.begin(), req.end(), back_inserter(channelList));
-
-            updatedFlag |= (1 << static_cast<uint8_t>(UpdatedProp::channel));
-            startServiceRestartTimer();
             res = req;
             return 1;
         });
 
     iface->register_property(
-        "State", stateValue, [this](const std::string &req, std::string &res) {
-            if (req == res)
+        srvCfgPropRunning, unitRunningState,
+        [this](const bool &req, bool &res) {
+            if (!internalSet)
             {
-                return 1;
+                if (req == res)
+                {
+                    return 1;
+                }
+                if (updateInProgress)
+                {
+                    return 0;
+                }
+                if (unitMaskedState)
+                { // block updating if masked
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Invalid value specified");
+                    return -EINVAL;
+                }
+                unitRunningState = req;
+                updatedFlag |=
+                    (1 << static_cast<uint8_t>(UpdatedProp::runningState));
+                startServiceRestartTimer();
             }
-            if ((req != "enabled") && (req != "disabled"))
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "Invalid value specified");
-                return -EINVAL;
-            }
-            stateValue = req;
-            updatedFlag |= (1 << static_cast<uint8_t>(UpdatedProp::state));
-            startServiceRestartTimer();
             res = req;
             return 1;
         });

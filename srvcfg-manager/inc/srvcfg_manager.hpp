@@ -26,43 +26,80 @@ static constexpr const char *serviceConfigSrvName =
     "xyz.openbmc_project.Control.Service.Manager";
 static constexpr const char *serviceConfigIntfName =
     "xyz.openbmc_project.Control.Service.Attributes";
+static constexpr const char *srcCfgMgrBasePath =
+    "/xyz/openbmc_project/control/service";
+static constexpr const char *srvCfgPropPort = "Port";
+static constexpr const char *srvCfgPropMasked = "Masked";
+static constexpr const char *srvCfgPropEnabled = "Enabled";
+static constexpr const char *srvCfgPropRunning = "Running";
 
 enum class UpdatedProp
 {
     port = 1,
-    channel,
-    state
+    maskedState,
+    enabledState,
+    runningState
 };
+
+using VariantType =
+    std::variant<std::string, int64_t, uint64_t, double, int32_t, uint32_t,
+                 int16_t, uint16_t, uint8_t, bool,
+                 std::vector<std::tuple<std::string, std::string>>>;
 
 class ServiceConfig
 {
   public:
     ServiceConfig(sdbusplus::asio::object_server &srv_,
                   std::shared_ptr<sdbusplus::asio::connection> &conn_,
-                  std::string objPath_, std::string unitName);
+                  const std::string &objPath_, const std::string &baseUnitName,
+                  const std::string &instanceName,
+                  const std::string &serviceObjPath,
+                  const std::string &socketObjPath);
     ~ServiceConfig() = default;
-
-    void applySystemDServiceConfig();
-    void startServiceRestartTimer();
 
     std::shared_ptr<sdbusplus::asio::connection> conn;
     uint8_t updatedFlag;
 
+    void stopAndApplyUnitConfig(boost::asio::yield_context yield);
+    void restartUnitConfig(boost::asio::yield_context yield);
+    void startServiceRestartTimer();
+
   private:
     sdbusplus::asio::object_server &server;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
+    bool internalSet = false;
     std::string objPath;
+    std::string instanceName;
+    std::string baseUnitName;
+    std::string instantiatedUnitName;
+    std::string socketObjectPath;
+    std::string serviceObjectPath;
+    std::string overrideConfDir;
 
+    // Properties
+    std::string activeState;
+    std::string subState;
     uint16_t portNum;
+    std::vector<std::string> channelList;
     std::string protocol;
     std::string stateValue;
-    std::vector<std::string> channelList;
+    bool unitMaskedState = false;
+    bool unitEnabledState = false;
+    bool unitRunningState = false;
+    std::string subStateValue;
 
+    bool isMaskedOut();
     void registerProperties();
-    std::string sysDUnitName;
-    std::string unitSocketFilePath;
-    std::string sysDSockObjPath;
-
-    void syncWithSystemD1Properties();
+    void queryAndUpdateProperties();
+    void createSocketOverrideConf();
+    void updateServiceProperties(
+        const boost::container::flat_map<std::string, VariantType>
+            &propertyMap);
+    void updateSocketProperties(
+        const boost::container::flat_map<std::string, VariantType>
+            &propertyMap);
+    std::string getSocketUnitName();
+    std::string getServiceUnitName();
 };
 
 } // namespace service
