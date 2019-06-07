@@ -1,7 +1,5 @@
 [Unit]
 Description=Special mode manager
-Wants=mapper-wait@-xyz-openbmc_project-Chassis-Control-Power0.service
-After=mapper-wait@-xyz-openbmc_project-Chassis-Control-Power0.service
 
 [Service]
 Restart=always
