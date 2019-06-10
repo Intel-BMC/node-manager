@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 project(phosphor-srvcfg-manager CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-rtti")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
@@ -17,6 +15,7 @@ add_definitions(-DBOOST_ALL_NO_LIB)
 add_definitions(-DBOOST_NO_RTTI)
 add_definitions(-DBOOST_NO_TYPEID)
 add_definitions(-DBOOST_ASIO_DISABLE_THREADS)
+add_definitions(-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 
 set(SRC_FILES src/main.cpp src/srvcfg_manager.cpp src/utils.cpp)
 
@@ -50,9 +49,10 @@ target_link_libraries(${PROJECT_NAME} systemd)
 target_link_libraries(${PROJECT_NAME} "${SDBUSPLUSPLUS_LIBRARIES} -lstdc++fs")
 target_link_libraries(${PROJECT_NAME} ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} boost_coroutine)
 target_link_libraries(${PROJECT_NAME} phosphor_logging)
 
 set(SERVICE_FILES ${PROJECT_SOURCE_DIR}/srvcfg-manager.service)
 
-install(TARGETS ${PROJECT_NAME} DESTINATION sbin)
+install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 install(FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
