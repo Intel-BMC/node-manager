@@ -9,4 +9,4 @@ StartLimitInterval=0
 Type=simple
 
 [Install]
-WantedBy=default.target
+#WantedBy=default.target
