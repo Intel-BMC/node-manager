@@ -22,16 +22,19 @@
 #include <cereal/types/unordered_map.hpp>
 #include <fstream>
 
-std::shared_ptr<boost::asio::deadline_timer> timer = nullptr;
+std::unique_ptr<boost::asio::steady_timer> timer = nullptr;
+std::unique_ptr<boost::asio::steady_timer> initTimer = nullptr;
 std::map<std::string, std::shared_ptr<phosphor::service::ServiceConfig>>
     srvMgrObjects;
+static bool unitQueryStarted = false;
 
 static constexpr const char* srvCfgMgrFile = "/etc/srvcfg-mgr.json";
 
 // Base service name list. All instance of these services and
 // units(service/socket) will be managed by this daemon.
-static std::vector<std::string> serviceNames = {
-    "phosphor-ipmi-net", "bmcweb", "phosphor-ipmi-kcs", "start-ipkvm"};
+static std::array<std::string, 5> serviceNames = {
+    "phosphor-ipmi-net", "bmcweb", "phosphor-ipmi-kcs", "start-ipkvm",
+    "obmc-console"};
 
 using ListUnitsType =
     std::tuple<std::string, std::string, std::string, std::string, std::string,
@@ -258,10 +261,35 @@ void checkAndInit(sdbusplus::asio::object_server& server,
             }
             if (std::get<uint64_t>(value))
             {
-                if (!srvMgrObjects.size())
+                if (!unitQueryStarted)
                 {
+                    unitQueryStarted = true;
                     init(server, conn);
                 }
+            }
+            else
+            {
+                // FIX-ME: Latest up-stream sync caused issue in receiving
+                // StartupFinished signal. Unable to get StartupFinished signal
+                // from systemd1 hence using poll method too, to trigger it
+                // properly.
+                constexpr size_t pollTimeout = 10; // seconds
+                initTimer->expires_after(std::chrono::seconds(pollTimeout));
+                initTimer->async_wait([&server, &conn](
+                                          const boost::system::error_code& ec) {
+                    if (ec == boost::asio::error::operation_aborted)
+                    {
+                        // Timer reset.
+                        return;
+                    }
+                    if (ec)
+                    {
+                        phosphor::logging::log<phosphor::logging::level::ERR>(
+                            "service config mgr - init - async wait error.");
+                        return;
+                    }
+                    checkAndInit(server, conn);
+                });
             }
         },
         sysdService, sysdObjPath, dBusPropIntf, dBusGetMethod, sysdMgrIntf,
@@ -272,7 +300,8 @@ int main()
 {
     boost::asio::io_service io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
-    timer = std::make_shared<boost::asio::deadline_timer>(io);
+    timer = std::make_unique<boost::asio::steady_timer>(io);
+    initTimer = std::make_unique<boost::asio::steady_timer>(io);
     conn->request_name(phosphor::service::serviceConfigSrvName);
     auto server = sdbusplus::asio::object_server(conn, true);
     auto mgrInterface =
@@ -286,8 +315,9 @@ int main()
         "member='StartupFinished',path='/org/freedesktop/systemd1',"
         "interface='org.freedesktop.systemd1.Manager'",
         [&server, &conn](sdbusplus::message::message& msg) {
-            if (!srvMgrObjects.size())
+            if (!unitQueryStarted)
             {
+                unitQueryStarted = true;
                 init(server, conn);
             }
         });

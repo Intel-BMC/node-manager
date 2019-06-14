@@ -18,7 +18,7 @@
 #include <boost/asio/spawn.hpp>
 #include "srvcfg_manager.hpp"
 
-extern std::shared_ptr<boost::asio::deadline_timer> timer;
+extern std::unique_ptr<boost::asio::steady_timer> timer;
 extern std::map<std::string, std::shared_ptr<phosphor::service::ServiceConfig>>
     srvMgrObjects;
 static bool updateInProgress = false;
@@ -337,7 +337,7 @@ void ServiceConfig::restartUnitConfig(boost::asio::yield_context yield)
 
 void ServiceConfig::startServiceRestartTimer()
 {
-    timer->expires_from_now(boost::posix_time::seconds(restartTimeout));
+    timer->expires_after(std::chrono::seconds(restartTimeout));
     timer->async_wait([this](const boost::system::error_code &ec) {
         if (ec == boost::asio::error::operation_aborted)
         {

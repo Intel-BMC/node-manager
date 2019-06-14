@@ -85,8 +85,8 @@ void systemdUnitAction(const std::shared_ptr<sdbusplus::asio::connection> &conn,
             phosphor::logging::elog<sdbusplus::xyz::openbmc_project::Common::
                                         Error::InternalFailure>();
         }
-        boost::asio::deadline_timer sleepTimer(conn->get_io_context());
-        sleepTimer.expires_from_now(boost::posix_time::milliseconds(20));
+        boost::asio::steady_timer sleepTimer(conn->get_io_context());
+        sleepTimer.expires_after(std::chrono::milliseconds(20));
         ec.clear();
         sleepTimer.async_wait(yield[ec]);
         checkAndThrowInternalFailure(ec, "Systemd operation timer error");
