@@ -119,14 +119,6 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
                          "xyz.openbmc_project.Network.IP.Protocol.IPv4");
 
     setting = &settings.emplace_back(
-        objectServer, "/xyz/openbmc_project/control/host0/restriction_mode",
-        "xyz.openbmc_project.Control.Security.RestrictionMode");
-
-    setting->addProperty("RestrictionMode",
-                         "xyz.openbmc_project.Control.Security.RestrictionMode."
-                         "Modes.Provisioning");
-
-    setting = &settings.emplace_back(
         objectServer, "/xyz/openbmc_project/control/host0/TPMEnable",
         "xyz.openbmc_project.Control.TPM.Policy");
 
