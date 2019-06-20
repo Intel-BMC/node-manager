@@ -1,0 +1,11 @@
+[Unit]
+Description=Settings
+
+[Service]
+ExecStart=/usr/bin/settings
+Restart=always
+BusName=xyz.openbmc_project.Settings
+Type=dbus
+
+[Install]
+WantedBy=multi-user.target
