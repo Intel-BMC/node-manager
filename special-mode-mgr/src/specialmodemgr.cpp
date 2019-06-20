@@ -23,7 +23,7 @@
 #include <string>
 
 static constexpr const char* specialModeMgrService =
-    "xyz.openbmc_project.SpeciaMode";
+    "xyz.openbmc_project.SpecialMode";
 static constexpr const char* specialModeIntf =
     "xyz.openbmc_project.Security.SpecialMode";
 static constexpr const char* specialModePath =
