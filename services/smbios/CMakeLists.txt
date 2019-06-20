@@ -33,8 +33,7 @@ include_directories (${DBUSINTERFACE_INCLUDE_DIRS})
 link_directories (${DBUSINTERFACE_LIBRARY_DIRS})
 
 set (SRC_FILES src/manager.cpp src/smbios-main.cpp src/timer.cpp src/cpu.cpp
-     src/dimm.cpp src/system.cpp ${DBUS_OBJECT_NAME}/server.cpp
-     ${DBUS_OBJECT_NAME}/error.cpp)
+     src/dimm.cpp ${DBUS_OBJECT_NAME}/server.cpp ${DBUS_OBJECT_NAME}/error.cpp)
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 

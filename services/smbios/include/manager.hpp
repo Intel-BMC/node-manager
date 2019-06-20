@@ -22,7 +22,6 @@
 #include <phosphor-logging/elog-errors.hpp>
 #include "cpu.hpp"
 #include "dimm.hpp"
-#include "system.hpp"
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -132,7 +131,6 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
 
     std::vector<std::unique_ptr<Dimm>> dimms;
     std::vector<std::unique_ptr<Cpu>> cpus;
-    std::unique_ptr<System> system;
 
     void systemInfoUpdate(void);
 

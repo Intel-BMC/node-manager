@@ -173,7 +173,6 @@ void MDR_V1::systemInfoUpdate()
     std::vector<std::unique_ptr<Dimm>>().swap(dimms);
     std::vector<std::unique_ptr<Cpu>>().swap(cpus);
 
-    system = std::make_unique<System>(bus, systemPath, &regionS[0]);
     for (int index = 0; index < num; index++)
     {
         path = dimmPath + std::to_string(index);
