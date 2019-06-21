@@ -170,6 +170,15 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
         "OCOTPolicy",
         "com.intel.Control.OCOTShutdownPolicy.Policy.NoShutdownOnOCOT");
 
+    setting =
+        &settings.emplace_back(objectServer, "/com/intel/control/NMISource",
+                               "com.intel.Control.NMISource");
+
+    setting->addProperty("BMCSource",
+                         "com.intel.Control.NMISource.BMCSourceSignal.None");
+
+    setting->addProperty("Enabled", true);
+
     setting = &settings.emplace_back(
         objectServer,
         "/xyz/openbmc_project/control/chassis_capabilities_config",
