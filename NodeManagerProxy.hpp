@@ -13,6 +13,7 @@
  *  limitations under the License.
  */
 
+#include <boost/container/flat_set.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
@@ -34,6 +35,22 @@ constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
 constexpr const char *sensorConfPath =
     "xyz.openbmc_project.Configuration.NMSensor";
 constexpr const char *sensorName = "Node_Manager_Sensor";
+constexpr const char *associationInterface = "org.openbmc.Associations";
+
+// this currently can be anything as it's only used to set the LED, might be
+// good later to change it for redfish, but I'm not sure to what today
+constexpr const char *meStatusPath = "/xyz/openbmc_project/status/me";
+
+using Association = std::tuple<std::string, std::string, std::string>;
+
+namespace power
+{
+const static constexpr char *busname = "xyz.openbmc_project.State.Host";
+const static constexpr char *interface = "xyz.openbmc_project.State.Host";
+const static constexpr char *path = "/xyz/openbmc_project/state/host0";
+const static constexpr char *property = "CurrentHostState";
+} // namespace power
+
 /**
  * @brief NMd defines
  */
@@ -182,13 +199,11 @@ class getNmStatistics : public Request
     {
         if (!association)
         {
-            using Association =
-                std::tuple<std::string, std::string, std::string>;
             std::vector<Association> associations;
             associations.push_back(Association("inventory", "sensors", path));
             association = server.add_interface("/xyz/openbmc_project/sensors/" +
                                                    type + "/" + name,
-                                               "org.openbmc.Associations");
+                                               associationInterface);
 
             association->register_property("associations", associations);
             association->initialize();
@@ -273,6 +288,73 @@ class GlobalPowerHwProtection : public getNmStatistics
 {
   public:
     using getNmStatistics::getNmStatistics;
+};
+
+struct HealthData
+{
+    HealthData(std::shared_ptr<sdbusplus::asio::dbus_interface> interface) :
+        interface(interface)
+    {
+    }
+
+    void set(const std::string &type, const std::string &level)
+    {
+        // todo: maybe look this up via mapper
+        constexpr const char *globalInventoryPath =
+            "/xyz/openbmc_project/CallbackManager";
+
+        fatal.erase(type);
+        critical.erase(type);
+        warning.erase(type);
+
+        if (level == "fatal")
+        {
+            fatal.insert(type);
+        }
+        else if (level == "critical")
+        {
+            critical.insert(type);
+        }
+        else if (level == "warning")
+        {
+            warning.insert(type);
+        }
+        else if (level != "ok")
+        {
+            throw std::invalid_argument(type);
+        }
+
+        std::vector<Association> association;
+        if (fatal.size())
+        {
+            association.emplace_back("", "critical", globalInventoryPath);
+            association.emplace_back("", "critical", meStatusPath);
+        }
+        else if (critical.size())
+        {
+            association.emplace_back("", "warning", globalInventoryPath);
+            association.emplace_back("", "critical", meStatusPath);
+        }
+        else if (warning.size())
+        {
+            association.emplace_back("", "warning", globalInventoryPath);
+            association.emplace_back("", "warning", meStatusPath);
+        }
+        interface->set_property("associations", association);
+    }
+
+    void clear()
+    {
+        fatal.clear();
+        critical.clear();
+        warning.clear();
+        interface->set_property("associations", std::vector<Association>{});
+    }
+
+    std::shared_ptr<sdbusplus::asio::dbus_interface> interface;
+    boost::container::flat_set<std::string> fatal;
+    boost::container::flat_set<std::string> critical;
+    boost::container::flat_set<std::string> warning;
 };
 
 #endif

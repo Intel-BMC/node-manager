@@ -184,12 +184,51 @@ int main(int argc, char *argv[])
     createAssociations();
     performReadings();
 
-    static auto match = std::make_unique<sdbusplus::bus::match::match>(
+    // associations have to be on the association interface
+    std::shared_ptr<sdbusplus::asio::dbus_interface> statusInterface =
+        server.add_interface(meStatusPath, associationInterface);
+    statusInterface->register_property("associations",
+                                       std::vector<Association>{});
+    statusInterface->initialize();
+
+    HealthData healthData(statusInterface);
+
+    std::shared_ptr<sdbusplus::asio::dbus_interface> healthInterface =
+        server.add_interface(meStatusPath, "xyz.openbmc_project.SetHealth");
+    healthInterface->register_method(
+        "SetHealth",
+        [&healthData](const std::string &type, const std::string &level) {
+            healthData.set(type, level);
+        });
+    healthInterface->initialize();
+
+    sdbusplus::bus::match::match configurationMatch(
         static_cast<sdbusplus::bus::bus &>(*conn),
         "type='signal',member='PropertiesChanged',"
         "arg0namespace='" +
             std::string(sensorConfPath) + "'",
         [](sdbusplus::message::message &message) { createAssociations(); });
+
+    sdbusplus::bus::match::match powerMatch(
+        static_cast<sdbusplus::bus::bus &>(*conn),
+        "type='signal',member='PropertiesChanged',path='" +
+            std::string(power::path) + "',arg0='" +
+            std::string(power::interface) + "'",
+        [&healthData](sdbusplus::message::message &message) {
+            std::string objectName;
+            boost::container::flat_map<std::string, std::variant<std::string>>
+                values;
+            message.read(objectName, values);
+            auto findState = values.find(power::property);
+            if (findState != values.end())
+            {
+                if (boost::ends_with(std::get<std::string>(findState->second),
+                                     "Running"))
+                {
+                    healthData.clear();
+                }
+            }
+        });
 
     io.run();
     return 0;
