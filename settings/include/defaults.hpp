@@ -205,12 +205,40 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("Limit", static_cast<double>(0));
 
-    setting =
-        &settings.emplace_back(objectServer, "/xyz/openbmc_project/ipmi/sol",
-                               "xyz.openbmc_project.Ipmi.SOL");
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/ipmi/sol/eth0",
+                                     "xyz.openbmc_project.Ipmi.SOL");
 
     setting->addProperty("Progress", static_cast<uint8_t>(0));
-    setting->addProperty("Enable", true);
+    setting->addProperty("Enable", false);
+    setting->addProperty("ForceEncryption", true);
+    setting->addProperty("ForceAuthentication", true);
+    setting->addProperty("Privilege", static_cast<uint8_t>(4));
+    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(12));
+    setting->addProperty("Threshold", static_cast<uint8_t>(96));
+    setting->addProperty("RetryCount", static_cast<uint8_t>(6));
+    setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
+
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/ipmi/sol/eth1",
+                                     "xyz.openbmc_project.Ipmi.SOL");
+
+    setting->addProperty("Progress", static_cast<uint8_t>(0));
+    setting->addProperty("Enable", false);
+    setting->addProperty("ForceEncryption", true);
+    setting->addProperty("ForceAuthentication", true);
+    setting->addProperty("Privilege", static_cast<uint8_t>(4));
+    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(12));
+    setting->addProperty("Threshold", static_cast<uint8_t>(96));
+    setting->addProperty("RetryCount", static_cast<uint8_t>(6));
+    setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
+
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/ipmi/sol/eth2",
+                                     "xyz.openbmc_project.Ipmi.SOL");
+
+    setting->addProperty("Progress", static_cast<uint8_t>(0));
+    setting->addProperty("Enable", false);
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
     setting->addProperty("Privilege", static_cast<uint8_t>(4));
