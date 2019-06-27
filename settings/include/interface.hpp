@@ -115,12 +115,15 @@ struct SettingsInterface
     }
 
     // specialization for char * as std::string is the nlohmann type
-    void addProperty(const std::string &name, const char *value)
+    void addProperty(const std::string &name, const char *value,
+                     const bool persist = true)
     {
-        addProperty(name, std::string(value));
+        addProperty(name, std::string(value), persist);
     }
 
-    template <typename T> void addProperty(const std::string &name, T value)
+    template <typename T>
+    void addProperty(const std::string &name, T value,
+                     const bool persist = true)
     {
 
         std::ifstream current(std::string(prefix) + *path);
@@ -154,8 +157,8 @@ struct SettingsInterface
 
         interface->register_property(
             name, value,
-            [path = std::shared_ptr<std::string>(path), name](const T &req,
-                                                              T &old) {
+            [path = std::shared_ptr<std::string>(path), name,
+             persist](const T &req, T &old) {
                 nlohmann::json data;
 
                 { // context is here for raii to close the file
@@ -172,17 +175,20 @@ struct SettingsInterface
                     }
                 }
 
-                data[name] = req;
-                std::filesystem::create_directories(
-                    std::filesystem::path(std::string(prefix) + *path)
-                        .parent_path());
-                std::ofstream output(std::string(prefix) + *path);
-                if (!output.good())
+                if (persist)
                 {
-                    std::cerr << "Cannot write data at " << *path << "\n";
-                    throw std::runtime_error("Persisting Error");
+                    data[name] = req;
+                    std::filesystem::create_directories(
+                        std::filesystem::path(std::string(prefix) + *path)
+                            .parent_path());
+                    std::ofstream output(std::string(prefix) + *path);
+                    if (!output.good())
+                    {
+                        std::cerr << "Cannot write data at " << *path << "\n";
+                        throw std::runtime_error("Persisting Error");
+                    }
+                    output << data;
                 }
-                output << data;
 
                 old = req;
 
