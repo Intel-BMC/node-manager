@@ -52,7 +52,9 @@ SpecialModeMgr::SpecialModeMgr(
     std::ifstream cmdLineIfs("/proc/cmdline");
     getline(cmdLineIfs, cmdLineStr);
     static constexpr const char* specialModeStr = "special=mfg";
-    if (cmdLineStr.find(specialModeStr) != std::string::npos)
+    static constexpr const char* acBootStr = "resetreason=0x11";
+    if ((cmdLineStr.find(specialModeStr) != std::string::npos) &&
+        (cmdLineStr.find(acBootStr) != std::string::npos))
     {
         conn->async_method_call(
             [this](boost::system::error_code ec, const VariantValue& mode) {
