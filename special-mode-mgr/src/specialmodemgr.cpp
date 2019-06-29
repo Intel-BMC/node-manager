@@ -72,75 +72,50 @@ SpecialModeMgr::SpecialModeMgr(
                     AddSpecialModeProperty();
                     return;
                 }
-                conn->async_method_call(
-                    [this](boost::system::error_code ec,
-                           const VariantValue& pwrFailValue) {
-                        if (ec)
-                        {
-                            phosphor::logging::log<
-                                phosphor::logging::level::INFO>(
-                                "ERROR with async_method_call");
-                            AddSpecialModeProperty();
-                            return;
-                        }
-                        if (std::get<bool>(pwrFailValue) == false)
-                        {
-                            AddSpecialModeProperty();
-                            return;
-                        }
-                        struct sysinfo sysInfo = {};
-                        int ret = sysinfo(&sysInfo);
-                        if (ret != 0)
-                        {
-                            phosphor::logging::log<
-                                phosphor::logging::level::INFO>(
-                                "ERROR in getting sysinfo",
-                                phosphor::logging::entry("RET = %d", ret));
-                            AddSpecialModeProperty();
-                            return;
-                        }
-                        constexpr int mtmAllowedTime = 12 * 60 * 60; // 12 hours
-                        int specialModeLockoutSeconds = 0;
-                        if (mtmAllowedTime > sysInfo.uptime)
-                        {
-                            specialMode = ManufacturingMode;
-                            specialModeLockoutSeconds =
-                                mtmAllowedTime - sysInfo.uptime;
-                        }
-                        AddSpecialModeProperty();
-                        if (!specialModeLockoutSeconds)
-                        {
-                            return;
-                        }
-                        timer->expires_from_now(boost::posix_time::seconds(
-                            specialModeLockoutSeconds));
-                        timer->async_wait(
-                            [this](const boost::system::error_code& ec) {
-                                if (ec == boost::asio::error::operation_aborted)
-                                {
-                                    // timer aborted
-                                    return;
-                                }
-                                else if (ec)
-                                {
-                                    phosphor::logging::log<
-                                        phosphor::logging::level::ERR>(
-                                        "Error in special mode "
-                                        "timer");
-                                    return;
-                                }
-                                iface->set_property(
-                                    "SpecialMode",
-                                    static_cast<uint8_t>(ManufacturingExpired));
-                            });
-                    },
-                    "xyz.openbmc_project.Chassis.Control.Power",
-                    "/xyz/openbmc_project/Chassis/Control/Power0",
-                    "org.freedesktop.DBus.Properties", "Get",
-                    "xyz.openbmc_project.Chassis.Control.Power", "PFail");
+                struct sysinfo sysInfo = {};
+                int ret = sysinfo(&sysInfo);
+                if (ret != 0)
+                {
+                    phosphor::logging::log<phosphor::logging::level::INFO>(
+                        "ERROR in getting sysinfo",
+                        phosphor::logging::entry("RET = %d", ret));
+                    AddSpecialModeProperty();
+                    return;
+                }
+                constexpr int mtmAllowedTime = 12 * 60 * 60; // 12 hours
+                int specialModeLockoutSeconds = 0;
+                if (mtmAllowedTime > sysInfo.uptime)
+                {
+                    specialMode = ManufacturingMode;
+                    specialModeLockoutSeconds = mtmAllowedTime - sysInfo.uptime;
+                }
+                AddSpecialModeProperty();
+                if (!specialModeLockoutSeconds)
+                {
+                    return;
+                }
+                timer->expires_from_now(
+                    boost::posix_time::seconds(specialModeLockoutSeconds));
+                timer->async_wait([this](const boost::system::error_code& ec) {
+                    if (ec == boost::asio::error::operation_aborted)
+                    {
+                        // timer aborted
+                        return;
+                    }
+                    else if (ec)
+                    {
+                        phosphor::logging::log<phosphor::logging::level::ERR>(
+                            "Error in special mode "
+                            "timer");
+                        return;
+                    }
+                    iface->set_property(
+                        "SpecialMode",
+                        static_cast<uint8_t>(ManufacturingExpired));
+                });
             },
-            "xyz.openbmc_project.Settings",
-            "/xyz/openbmc_project/control/host0/restriction_mode",
+            "xyz.openbmc_project.RestrictionMode.Manager",
+            "/xyz/openbmc_project/control/security/restriction_mode",
             "org.freedesktop.DBus.Properties", "Get",
             "xyz.openbmc_project.Control.Security.RestrictionMode",
             "RestrictionMode");
