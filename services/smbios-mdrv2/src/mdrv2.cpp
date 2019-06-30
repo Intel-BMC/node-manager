@@ -268,6 +268,10 @@ bool MDR_V2::sendDirectoryInformation(uint8_t dirVersion, uint8_t dirIndex,
         uint8_t idIndex = dirIndex;
 
         uint8_t *pData = dirEntry.data();
+        if (pData == nullptr)
+        {
+            return false;
+        }
         for (uint8_t index = 0; index < returnedEntries; index++)
         {
             auto data = reinterpret_cast<const Mdr2DirEntry *>(pData);
