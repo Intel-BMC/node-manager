@@ -1,0 +1,15 @@
+[Unit]
+Description=Restriction mode manager
+Wants=mapper-wait@-xyz-openbmc_project-u_boot-environment-mgr.service
+After=mapper-wait@-xyz-openbmc_project-u_boot-environment-mgr.service
+
+[Service]
+Restart=always
+RestartSec=2
+ExecStart=/usr/bin/prov-mode-mgr
+StartLimitInterval=0
+Type=dbus
+BusName=xyz.openbmc_project.RestrictionMode.Manager
+
+[Install]
+WantedBy=basic.target
