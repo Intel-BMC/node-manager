@@ -18,42 +18,46 @@
 
 #include "mdrv2.hpp"
 
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 namespace phosphor
 {
 namespace smbios
 {
 
-static std::string getNode(uint8_t *node, size_t len)
-{
-    std::string result;
-    for (int index = 0; index < len; index++)
-    {
-        result += std::to_string(node[index]);
-    }
-
-    return result;
-}
-
 std::string System::uUID(std::string value)
 {
-    std::string result = "No UUID";
     uint8_t *dataIn = storage;
     dataIn = getSMBIOSTypePtr(dataIn, systemType);
     if (dataIn != nullptr)
     {
         auto systemInfo = reinterpret_cast<struct SystemInfo *>(dataIn);
-        struct UUID uUID = systemInfo->uUID;
-        std::string tempS = std::to_string(uUID.timeLow) + "-" +
-                            std::to_string(uUID.timeMid) + "-" +
-                            std::to_string(uUID.timeHiAndVer) + "-";
-        tempS += std::to_string(uUID.clockSeqHi) +
-                 std::to_string(uUID.clockSeqLow) + "-";
-        tempS += getNode(uUID.node, sizeof(uUID.node) / sizeof(uUID.node[0]));
+        std::stringstream stream;
+        stream << std::setfill('0') << std::hex;
+        stream << std::setw(8) << systemInfo->uUID.timeLow;
+        stream << "-";
+        stream << std::setw(4) << systemInfo->uUID.timeMid;
+        stream << "-";
+        stream << std::setw(4) << systemInfo->uUID.timeHiAndVer;
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.clockSeqHi);
+        stream << std::setw(2)
+               << static_cast<int>(systemInfo->uUID.clockSeqLow);
+        stream << "-";
+        static_assert(sizeof(systemInfo->uUID.node) == 6);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[0]);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[1]);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[2]);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[3]);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[4]);
+        stream << std::setw(2) << static_cast<int>(systemInfo->uUID.node[5]);
 
-        result = tempS;
+        return sdbusplus::xyz::openbmc_project::Common::server::UUID::uUID(
+            stream.str());
     }
 
-    return sdbusplus::xyz::openbmc_project::Common::server::UUID::uUID(result);
+    return sdbusplus::xyz::openbmc_project::Common::server::UUID::uUID(
+        "00000000-0000-0000-0000-000000000000");
 }
 
 std::string System::version(std::string value)
