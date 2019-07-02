@@ -1,12 +1,15 @@
 [Unit]
 Description=Special mode manager
+Wants=mapper-wait@-xyz-openbmc_project-control-security-restriction_mode.service
+After=mapper-wait@-xyz-openbmc_project-control-security-restriction_mode.service
 
 [Service]
 Restart=always
 RestartSec=2
 ExecStart=/usr/bin/specialmodemgr
 StartLimitInterval=0
-Type=simple
+Type=dbus
+BusName=xyz.openbmc_project.SpecialMode
 
 [Install]
-#WantedBy=default.target
+WantedBy=multi-user.target

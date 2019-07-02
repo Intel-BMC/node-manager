@@ -31,7 +31,7 @@ pkg_check_modules(LOGGING phosphor-logging REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} systemd)
-target_link_libraries(${PROJECT_NAME} sdbusplus -lstdc++fs)
+target_link_libraries(${PROJECT_NAME} sdbusplus)
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} phosphor_logging)
 
