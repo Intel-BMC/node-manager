@@ -118,13 +118,15 @@ void createSensors()
 {
     // NM Statistics
     // Global power statistics
+    configuredSensors.push_back(std::make_unique<PowerMetric>(server));
     configuredSensors.push_back(std::make_unique<GlobalPowerPlatform>(
-        server, 0, 2040, "power", "Platform_PWR", globalPowerStats,
+        server, 0, 2040, "power", "total_power", globalPowerStats,
         entirePlatform, 0));
-    configuredSensors.push_back(std::make_unique<GlobalPowerCpu>(
-        server, 0, 510, "power", "CPU_PWR", globalPowerStats, cpuSubsystem, 0));
+    configuredSensors.push_back(
+        std::make_unique<GlobalPowerCpu>(server, 0, 510, "power", "cpu_power",
+                                         globalPowerStats, cpuSubsystem, 0));
     configuredSensors.push_back(std::make_unique<GlobalPowerMemory>(
-        server, 0, 255, "power", "Memory_PWR", globalPowerStats,
+        server, 0, 255, "power", "memory_power", globalPowerStats,
         memorySubsystem, 0));
 }
 
@@ -183,6 +185,7 @@ int main(int argc, char *argv[])
     createSensors();
     createAssociations();
     performReadings();
+    PowerCap powerCap(conn, server);
 
     // associations have to be on the association interface
     std::shared_ptr<sdbusplus::asio::dbus_interface> statusInterface =

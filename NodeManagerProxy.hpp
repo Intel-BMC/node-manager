@@ -26,7 +26,10 @@
 constexpr const char *nmdBus = "xyz.openbmc_project.NodeManagerProxy";
 constexpr const char *nmdObj = "/xyz/openbmc_project/NodeManagerProxy";
 constexpr const char *propObj = "/xyz/openbmc_project/sensors/";
-constexpr const char *nmdIntf = "xyz.openbmc_project.Sensor.Value";
+constexpr const char *nmdSensorIntf = "xyz.openbmc_project.Sensor.Value";
+constexpr const char *nmdPowerCapIntf = "xyz.openbmc_project.Control.Power.Cap";
+constexpr const char *nmdPowerMetricIntf =
+    "xyz.openbmc_project.Power.PowerMetric";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
 constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
@@ -91,6 +94,22 @@ constexpr uint8_t ipmiGetNmStatisticsNetFn = 0x2E;
 constexpr uint8_t ipmiGetNmStatisticsLun = 0;
 constexpr uint8_t ipmiGetNmStatisticsCmd = 0xC8;
 
+/**
+ * @brief Set Node Manager Policy defines
+ */
+constexpr uint8_t ipmiSetNmPolicyNetFn = 0x2E;
+constexpr uint8_t ipmiSetNmPolicyLun = 0;
+constexpr uint8_t ipmiSetNmPolicyCmd = 0xC1;
+
+constexpr uint32_t ipmiSetNmPolicyLimitInWatts = 0;
+
+/**
+ * @brief Enable/Disable NM Policy Control defines
+ */
+constexpr uint8_t ipmiEnaDisNmPolicyCtrlNetFn = 0x2E;
+constexpr uint8_t ipmiEnaDisNmPolicyCtrlLun = 0;
+constexpr uint8_t ipmiEnaDisNmPolicyCtrlCmd = 0xC0;
+
 // Mode
 constexpr uint8_t globalPowerStats = 0x1;
 constexpr uint8_t globalInletTempStats = 0x2;
@@ -151,6 +170,192 @@ typedef struct
 static_assert(sizeof(nmIpmiGetNmStatisticsResp) == 20);
 
 /**
+ * @brief Set Node Manager Policy request format
+ */
+typedef struct
+{
+    ipmiIana iana;
+    uint8_t domainId : 4, policyEnabled : 1, reservedByte4 : 3;
+    uint8_t policyId;
+    uint8_t triggerType : 4, configurationAction : 1, cpuPowerCorrection : 2,
+        storageOption : 1;
+    uint8_t failureAction : 2, reservedByte7 : 5, dcPowerDomain : 1;
+    int16_t limit;
+    uint32_t correctionTime;
+    uint16_t triggerLimit;
+    uint16_t statsPeriod;
+} __attribute__((packed)) nmIpmiSetNmPolicyReq;
+
+/**
+ * @brief Enable/Disable NM Policy Control request format
+ */
+
+typedef struct
+{
+    ipmiIana iana;
+    uint8_t flags : 3, reserved5b : 5;
+    uint8_t domainId : 4, reserved4b : 4;
+    uint8_t policyId;
+} __attribute__((packed)) nmIpmiEnaDisNmPolicyCtrlReq;
+
+/**
+ * @brief Ipmb utils
+ */
+using IpmbDbusRspType =
+    std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>;
+
+int ipmbSendRequest(sdbusplus::asio::connection &conn,
+                    IpmbDbusRspType &ipmbResponse,
+                    const std::vector<uint8_t> &dataToSend, uint8_t netFn,
+                    uint8_t lun, uint8_t cmd)
+{
+    try
+    {
+        auto mesg =
+            conn.new_method_call(ipmbBus, ipmbObj, ipmbIntf, "sendRequest");
+        mesg.append(ipmbMeChannelNum, netFn, lun, cmd, dataToSend);
+        auto ret = conn.call(mesg);
+        ret.read(ipmbResponse);
+        return 0;
+    }
+    catch (sdbusplus::exception::SdBusError &e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmbSendRequest:, dbus call exception");
+        return -1;
+    }
+}
+
+/**
+ * @brief PowerCap class declaration
+ */
+class PowerCap
+{
+  public:
+    PowerCap(std::shared_ptr<sdbusplus::asio::connection> conn,
+             sdbusplus::asio::object_server &server) :
+        conn(conn)
+    {
+        iface = server.add_interface(
+            "/xyz/openbmc_project/control/host0/power_cap", nmdPowerCapIntf);
+        iface->register_property(
+            "PowerCap", ipmiSetNmPolicyLimitInWatts,
+            [this](const uint32_t &newVal, uint32_t &oldVal) {
+                int cc = setPolicy(newVal);
+                if (cc == 0)
+                {
+                    oldVal = newVal;
+                }
+                return 1;
+            });
+        iface->register_property("PowerCapEnable", false,
+                                 [this](const bool &newVal, bool &oldVal) {
+                                     int cc = enablePolicy(newVal);
+                                     if (cc == 0)
+                                     {
+                                         oldVal = newVal;
+                                     }
+                                     return 1;
+                                 });
+        iface->initialize();
+    }
+
+    int setPolicy(uint32_t limitInWatts)
+    {
+        // prepare data to be sent
+        std::vector<uint8_t> dataToSend;
+        dataToSend.resize(sizeof(nmIpmiSetNmPolicyReq));
+
+        auto nmSetPolicy =
+            reinterpret_cast<nmIpmiSetNmPolicyReq *>(dataToSend.data());
+
+        ipmiSetIntelIanaNumber(nmSetPolicy->iana);
+        nmSetPolicy->domainId = 0x0;            // platform domain
+        nmSetPolicy->policyEnabled = 0x0;       // enable policy during creation
+        nmSetPolicy->reservedByte4 = 0x0;       // reserved
+        nmSetPolicy->policyId = 0xA;            // policy number 10
+        nmSetPolicy->triggerType = 0x0;         // boot time policy
+        nmSetPolicy->configurationAction = 0x1; // override policy
+        nmSetPolicy->cpuPowerCorrection = 0x2;  // automatic mode
+        nmSetPolicy->storageOption = 0x0;       // non-volatile
+        nmSetPolicy->failureAction = 0x0;       // no action
+        nmSetPolicy->reservedByte7 = 0x0;       // reserved
+        nmSetPolicy->dcPowerDomain = 0x0;       // primary power domain
+        nmSetPolicy->limit = limitInWatts;
+        nmSetPolicy->correctionTime = 0x2710; // 10000 milliseconds
+        nmSetPolicy->triggerLimit = 0x0;      // ignored for platform domain
+        nmSetPolicy->statsPeriod = 0xA;       // 10 seconds
+
+        IpmbDbusRspType ipmbResponse;
+        int sendStatus = ipmbSendRequest(
+            *conn, ipmbResponse, dataToSend, ipmiSetNmPolicyNetFn,
+            ipmiSetNmPolicyLun, ipmiSetNmPolicyCmd);
+
+        if (sendStatus != 0)
+            return sendStatus;
+
+        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
+
+        if (status)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "setPolicy: non-zero response status ",
+                phosphor::logging::entry("%d", status));
+            return -1;
+        }
+
+        return cc;
+    }
+
+    int enablePolicy(bool enable)
+    {
+        // prepare data to be sent
+        std::vector<uint8_t> dataToSend;
+        dataToSend.resize(sizeof(nmIpmiEnaDisNmPolicyCtrlReq));
+
+        auto nmEnablePolicy =
+            reinterpret_cast<nmIpmiEnaDisNmPolicyCtrlReq *>(dataToSend.data());
+
+        uint8_t flags = 0x4; // per policy disable policy for given domain
+        if (enable)
+        {
+            flags = 0x5; // per policy enable policy for given domain
+        }
+
+        ipmiSetIntelIanaNumber(nmEnablePolicy->iana);
+        nmEnablePolicy->flags = flags;
+        nmEnablePolicy->reserved5b = 0x0; // reserved
+        nmEnablePolicy->domainId = 0x0;   // platform domain
+        nmEnablePolicy->reserved4b = 0x0; // reserved
+        nmEnablePolicy->policyId = 0xA;   // policy number 10
+
+        IpmbDbusRspType ipmbResponse;
+        int sendStatus = ipmbSendRequest(
+            *conn, ipmbResponse, dataToSend, ipmiEnaDisNmPolicyCtrlNetFn,
+            ipmiEnaDisNmPolicyCtrlLun, ipmiEnaDisNmPolicyCtrlCmd);
+
+        if (sendStatus != 0)
+            return sendStatus;
+
+        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
+
+        if (status)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "enablePolicy: non-zero response status ",
+                phosphor::logging::entry("%d", status));
+            return -1;
+        }
+
+        return cc;
+    }
+
+  private:
+    std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
+    std::shared_ptr<sdbusplus::asio::connection> conn;
+};
+
+/**
  * @brief Request class declaration
  */
 class Request
@@ -165,7 +370,7 @@ class Request
                                 const std::vector<uint8_t> &dataReceived) = 0;
 
     virtual void createAssociation(sdbusplus::asio::object_server &server,
-                                   std::string &path) = 0;
+                                   std::string &path){};
 
     virtual ~Request(){};
 
@@ -174,6 +379,79 @@ class Request
 
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
     std::shared_ptr<sdbusplus::asio::dbus_interface> association;
+};
+
+/**
+ * @brief PowerMetric class declaration
+ */
+class PowerMetric : public Request
+{
+  public:
+    PowerMetric(sdbusplus::asio::object_server &server)
+    {
+        iface = server.add_interface("/xyz/openbmc_project/Power/PowerMetric",
+                                     nmdPowerMetricIntf);
+
+        iface->register_property("IntervalInMin", static_cast<uint64_t>(0));
+        iface->register_property("MinConsumedWatts", static_cast<uint16_t>(0));
+        iface->register_property("MaxConsumedWatts", static_cast<uint16_t>(0));
+        iface->register_property("AverageConsumedWatts",
+                                 static_cast<uint16_t>(0));
+        iface->initialize();
+    }
+
+    void handleResponse(const uint8_t completionCode,
+                        const std::vector<uint8_t> &dataReceived)
+    {
+        if (completionCode != 0)
+            return;
+
+        if (dataReceived.size() != sizeof(nmIpmiGetNmStatisticsResp))
+        {
+            phosphor::logging::log<phosphor::logging::level::WARNING>(
+                "handleResponse: response size does not match expected value");
+            return;
+        }
+
+        auto getNmStatistics =
+            reinterpret_cast<const nmIpmiGetNmStatisticsResp *>(
+                dataReceived.data());
+
+        iface->set_property(
+            "IntervalInMin",
+            static_cast<uint64_t>(getNmStatistics->statsReportPeriod));
+        iface->set_property(
+            "MinConsumedWatts",
+            static_cast<uint16_t>(getNmStatistics->data.stats.min));
+        iface->set_property(
+            "MaxConsumedWatts",
+            static_cast<uint16_t>(getNmStatistics->data.stats.max));
+        iface->set_property(
+            "AverageConsumedWatts",
+            static_cast<uint16_t>(getNmStatistics->data.stats.avg));
+    }
+
+    void prepareRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
+                        std::vector<uint8_t> &dataToSend)
+    {
+        dataToSend.resize(sizeof(nmIpmiGetNmStatisticsReq));
+
+        auto nmGetStatistics =
+            reinterpret_cast<nmIpmiGetNmStatisticsReq *>(dataToSend.data());
+
+        netFn = ipmiGetNmStatisticsNetFn;
+        lun = ipmiGetNmStatisticsLun;
+        cmd = ipmiGetNmStatisticsCmd;
+
+        ipmiSetIntelIanaNumber(nmGetStatistics->iana);
+        nmGetStatistics->mode = 1;
+        nmGetStatistics->reserved3B = 0;
+        nmGetStatistics->domainId = 0;
+        nmGetStatistics->statsSide = 0;
+        nmGetStatistics->reserved = 0;
+        nmGetStatistics->perComponent = 0;
+        nmGetStatistics->policyId = 0;
+    }
 };
 
 class getNmStatistics : public Request
@@ -185,11 +463,14 @@ class getNmStatistics : public Request
         mode(mode),
         domainId(domainId), policyId(policyId), type(type), name(name)
     {
-        iface = server.add_interface(propObj + type + '/' + name, nmdIntf);
+        iface =
+            server.add_interface(propObj + type + '/' + name, nmdSensorIntf);
 
         iface->register_property("MaxValue", static_cast<double>(maxValue));
         iface->register_property("MinValue", static_cast<double>(minValue));
         iface->register_property("Value", static_cast<uint16_t>(0));
+        iface->register_property(
+            "Unit", std::string("xyz.openbmc_project.Sensor.Value.Unit.Watts"));
 
         iface->initialize();
     }
@@ -214,9 +495,7 @@ class getNmStatistics : public Request
                         const std::vector<uint8_t> &dataReceived)
     {
         if (completionCode != 0)
-        {
             return;
-        }
 
         if (dataReceived.size() != sizeof(nmIpmiGetNmStatisticsResp))
         {
