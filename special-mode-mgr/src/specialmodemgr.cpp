@@ -28,6 +28,10 @@ static constexpr const char* specialModeIntf =
     "xyz.openbmc_project.Security.SpecialMode";
 static constexpr const char* specialModePath =
     "/xyz/openbmc_project/security/specialMode";
+static constexpr const char* provisioningMode =
+    "xyz.openbmc_project.Control.Security.RestrictionMode.Modes.Provisioning";
+
+static constexpr const char* restrictionModeProperty = "RestrictionMode";
 
 using VariantValue =
     std::variant<bool, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t,
@@ -65,9 +69,7 @@ SpecialModeMgr::SpecialModeMgr(
                     AddSpecialModeProperty();
                     return;
                 }
-                if (std::get<std::string>(mode) !=
-                    "xyz.openbmc_project.Control.Security."
-                    "RestrictionMode.Modes.Provisioning")
+                if (std::get<std::string>(mode) != provisioningMode)
                 {
                     AddSpecialModeProperty();
                     return;
@@ -110,7 +112,7 @@ SpecialModeMgr::SpecialModeMgr(
                         return;
                     }
                     iface->set_property(
-                        "SpecialMode",
+                        strSpecialMode,
                         static_cast<uint8_t>(ManufacturingExpired));
                 });
             },
@@ -118,7 +120,7 @@ SpecialModeMgr::SpecialModeMgr(
             "/xyz/openbmc_project/control/security/restriction_mode",
             "org.freedesktop.DBus.Properties", "Get",
             "xyz.openbmc_project.Control.Security.RestrictionMode",
-            "RestrictionMode");
+            restrictionModeProperty);
     }
     else
     {
@@ -131,7 +133,7 @@ void SpecialModeMgr::AddSpecialModeProperty()
     // Add path to server object
     iface = server.add_interface(specialModePath, specialModeIntf);
     iface->register_property(
-        "SpecialMode", specialMode,
+        strSpecialMode, specialMode,
         // Ignore set
         [this](const uint8_t& req, uint8_t& propertyValue) {
             if (req == ManufacturingExpired && specialMode != req)
@@ -155,6 +157,40 @@ int main()
     sdbusplus::asio::object_server server(conn);
 
     SpecialModeMgr specilModeMgr(io, server, conn);
+
+    static auto match = sdbusplus::bus::match::match(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',member='PropertiesChanged', "
+        "interface='org.freedesktop.DBus.Properties', "
+        "arg0namespace='xyz.openbmc_project.Control.Security.RestrictionMode'",
+        [&specilModeMgr](sdbusplus::message::message& message) {
+            std::string intfName;
+            std::map<std::string, std::variant<std::string>> properties;
+
+            message.read(intfName,
+                         properties); // skipping reading of 3rd argument
+
+            std::variant<std::string> mode;
+
+            try
+            {
+                mode = properties.at(restrictionModeProperty);
+            }
+            catch (const std::out_of_range& e)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "Error in finding RestrictionMode property");
+
+                throw std::out_of_range("Out of range");
+            }
+            if (std::get<std::string>(mode) != provisioningMode)
+            {
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                    "Mode is not provisioning ");
+
+                specilModeMgr.SetSpecialModeValue(ManufacturingExpired);
+            }
+        });
 
     io.run();
 }
