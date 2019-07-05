@@ -1,0 +1,14 @@
+[Unit]
+Description=Daemon manages PFR dbus properties and Event logs
+
+[Service]
+Restart=always
+ExecStart=/usr/bin/env intel-pfr-manager
+RestartSec=5
+StartLimitInterval=0
+SyslogIdentifier=intel-pfr-manager
+Type=dbus
+BusName=xyz.openbmc_project.Intel.PFR.Manager
+
+[Install]
+WantedBy=multi-user.target
