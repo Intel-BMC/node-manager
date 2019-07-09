@@ -17,6 +17,10 @@
 
 constexpr const char *prefix = "/var/lib/phosphor-settings-manager/settings";
 
+// because some paths collide with others
+// i.e. /xyz/openbmc_project/host collides with /xyz/openbmc/host/foo
+constexpr const char *trail = "_";
+
 #include "utils.hpp"
 
 #include <fstream>
@@ -33,9 +37,9 @@ struct SettingsInterface
     SettingsInterface(sdbusplus::asio::object_server &objectServer,
                       const std::string &objectPath, const std::string &iface) :
         objectServer(objectServer),
-        path(std::make_shared<std::string>(objectPath))
+        path(std::make_shared<std::string>(objectPath + trail))
     {
-        interface = objectServer.add_interface(*path, iface);
+        interface = objectServer.add_interface(objectPath, iface);
     }
     ~SettingsInterface()
     {
