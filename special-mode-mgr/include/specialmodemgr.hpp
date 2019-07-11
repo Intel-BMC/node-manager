@@ -19,6 +19,8 @@
 #include <boost/asio/deadline_timer.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
+static constexpr const char* strSpecialMode = "SpecialMode";
+
 enum SpecialMode : uint8_t
 {
     None = 0,
@@ -37,6 +39,10 @@ class SpecialModeMgr
     void AddSpecialModeProperty();
 
   public:
+    uint8_t SetSpecialModeValue(uint8_t value) const
+    {
+        return iface->set_property(strSpecialMode, value);
+    }
     SpecialModeMgr(boost::asio::io_service& io,
                    sdbusplus::asio::object_server& srv,
                    std::shared_ptr<sdbusplus::asio::connection>& conn);
