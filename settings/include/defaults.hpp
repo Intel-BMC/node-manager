@@ -151,8 +151,13 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
         objectServer, "/xyz/openbmc_project/control/processor_error_config",
         "xyz.openbmc_project.Control.Processor.ErrConfig");
 
-    setting->addProperty("ResetCfg", static_cast<uint8_t>(0));
-    setting->addProperty("ResetErrorOccurrenceCounts", static_cast<uint8_t>(0));
+    setting->addProperty("ResetOnCATERR", false);
+    setting->addProperty("ResetOnERR2", false);
+    setting->addProperty("ErrorCountCPU1", static_cast<uint8_t>(0));
+    setting->addProperty("ErrorCountCPU2", static_cast<uint8_t>(0));
+    setting->addProperty("ErrorCountCPU3", static_cast<uint8_t>(0));
+    setting->addProperty("ErrorCountCPU4", static_cast<uint8_t>(0));
+    setting->addProperty("CrashdumpCount", static_cast<uint8_t>(0));
 
     setting = &settings.emplace_back(
         objectServer, "/com/intel/control/ocotshutdown_policy_config",
