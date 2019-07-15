@@ -46,6 +46,13 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
         "BootSource",
         "xyz.openbmc_project.Control.Boot.Source.Sources.Default");
 
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/control/host0/boot",
+                                     "xyz.openbmc_project.Control.Boot.Mode");
+
+    setting->addProperty("BootMode",
+                         "xyz.openbmc_project.Control.Boot.Mode.Modes.Regular");
+
     setting = &settings.emplace_back(
         objectServer, "/xyz/openbmc_project/control/host0/boot/one_time",
         "xyz.openbmc_project.Control.Boot.Source");
@@ -53,6 +60,19 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty(
         "BootSource",
         "xyz.openbmc_project.Control.Boot.Source.Sources.Default");
+
+    setting = &settings.emplace_back(
+        objectServer, "/xyz/openbmc_project/control/host0/boot/one_time",
+        "xyz.openbmc_project.Control.Boot.Mode");
+
+    setting->addProperty("BootMode",
+                         "xyz.openbmc_project.Control.Boot.Mode.Modes.Regular");
+
+    setting = &settings.emplace_back(
+        objectServer, "/xyz/openbmc_project/control/host0/boot/one_time",
+        "xyz.openbmc_project.Object.Enable");
+
+    setting->addProperty("Enabled", true);
 
     setting = &settings.emplace_back(
         objectServer, "/xyz/openbmc_project/control/host0/power_cap",
