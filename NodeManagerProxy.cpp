@@ -186,6 +186,7 @@ int main(int argc, char *argv[])
     createAssociations();
     performReadings();
     PowerCap powerCap(conn, server);
+    GetMeVer getMeVer(conn, server);
 
     // associations have to be on the association interface
     std::shared_ptr<sdbusplus::asio::dbus_interface> statusInterface =

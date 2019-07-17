@@ -30,6 +30,7 @@ constexpr const char *nmdSensorIntf = "xyz.openbmc_project.Sensor.Value";
 constexpr const char *nmdPowerCapIntf = "xyz.openbmc_project.Control.Power.Cap";
 constexpr const char *nmdPowerMetricIntf =
     "xyz.openbmc_project.Power.PowerMetric";
+constexpr const char *nmdMeVerIntf = "xyz.openbmc_project.Software.Version";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
 constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
@@ -127,6 +128,57 @@ constexpr uint8_t cpuSubsystem = 0x1;
 constexpr uint8_t memorySubsystem = 0x2;
 constexpr uint8_t hwProtection = 0x3;
 constexpr uint8_t highPowerIOsubsystem = 0x4;
+
+/**
+ * @brief Get Device ID defines
+ */
+constexpr uint8_t ipmiGetDevIdNetFn = 0x6;
+constexpr uint8_t ipmiGetDevIdLun = 0;
+constexpr uint8_t ipmiGetDevIdCmd = 0x1;
+
+/**
+ * @brief Part of Get Device ID Command Response Payload
+ */
+typedef struct
+{
+    uint8_t fwMajorRev : 7,  // Binary encoded Major Version
+        inUpgrade : 1;       // In Upgrade State
+    uint8_t fwHotfixRev : 4, // BCD encoded Hotfix Version
+        fwMinorRev : 4;      // BCD encoded Minor Version
+} __attribute__((packed)) ipmiFwVerMajorMinor;
+
+/**
+ * @brief Part of Get Device ID Command Response Payload - Auxiliary
+ * Firmware Revision Information
+ */
+typedef struct
+{
+    uint8_t nmVersion : 4, // Node Manager Version
+        dcmiVersion : 4;   // DCMI Version
+    uint8_t b : 4,         // BCD encoded Build Number - tens
+        a : 4,             // BCD encoded Build Number - hundreds
+        patch : 4,         // BCD encoded Patch Number
+        c : 4;             // BCD encoded Build Number - digits
+    uint8_t imageFlags;
+} __attribute__((packed)) ipmiFwVerAux;
+
+/**
+ * @brief Get Device ID Command Full Response Payload
+ */
+typedef struct
+{
+    uint8_t deviceId;                 // Device ID
+    uint8_t deviceRev : 4,            // Device Revision
+        reserved0 : 3,                // Reserved bits
+        sdrPresent : 1;               // SDR State
+    ipmiFwVerMajorMinor fwMajorMinor; // Major and Minor Version
+    uint8_t ipmiVersion;   // BCD encoded IPMI Version, reversed digit order
+    uint8_t featureMask;   // Bitmask of supported features
+    ipmiIana ianaId;       // Manufacturers ID
+    uint8_t prodIdMinor;   // Product ID Minor Version
+    uint8_t prodIdMajor;   // Product ID Major Version
+    ipmiFwVerAux fwVerAux; // NmVersion, Build Number etc.
+} __attribute__((packed)) ipmiGetDeviceIdResp;
 
 /**
  * @brief Get Node Manager Statistics request format
@@ -348,6 +400,89 @@ class PowerCap
         }
 
         return cc;
+    }
+
+  private:
+    std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
+    std::shared_ptr<sdbusplus::asio::connection> conn;
+};
+
+/**
+ * @brief ME FW version class declaration
+ */
+class GetMeVer
+{
+  public:
+    GetMeVer(std::shared_ptr<sdbusplus::asio::connection> conn,
+             sdbusplus::asio::object_server &server) :
+        conn(conn)
+    {
+        iface = server.add_interface("/xyz/openbmc_project/me_version",
+                                     nmdMeVerIntf);
+
+        iface->register_property(
+            "VersionPurpose",
+            std::string(
+                "xyz.openbmc_project.Software.Version.VersionPurpose.Other"));
+
+        iface->register_property(
+            "Version", std::string(""),
+            [](const std::string &newVal, std::string &oldVal) { return 1; },
+            [this](const std::string &val) { return getDevId(); });
+
+        iface->initialize();
+    }
+
+    std::string getDevId()
+    {
+        constexpr const char *invalidMeVersion = "";
+        std::vector<uint8_t> dataToSend;
+
+        IpmbDbusRspType ipmbResponse;
+        int sendStatus =
+            ipmbSendRequest(*conn, ipmbResponse, dataToSend, ipmiGetDevIdNetFn,
+                            ipmiGetDevIdLun, ipmiGetDevIdCmd);
+
+        if (sendStatus)
+        {
+            return invalidMeVersion;
+        }
+
+        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
+
+        if (status)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "getDevId: ipmb non-zero response status ",
+                phosphor::logging::entry("%d", status));
+            return invalidMeVersion;
+        }
+        if (cc)
+        {
+            phosphor::logging::log<phosphor::logging::level::WARNING>(
+                "getDevId: non-zero completion code ",
+                phosphor::logging::entry("%d", cc));
+            return invalidMeVersion;
+        }
+        if (dataReceived.size() != sizeof(ipmiGetDeviceIdResp))
+        {
+            phosphor::logging::log<phosphor::logging::level::WARNING>(
+                "getDevId: response size does not match expected value");
+            return invalidMeVersion;
+        }
+
+        auto getDevIdResp =
+            reinterpret_cast<const ipmiGetDeviceIdResp *>(dataReceived.data());
+
+        auto major = std::to_string(getDevIdResp->fwMajorMinor.fwMajorRev);
+        auto minor = std::to_string(getDevIdResp->fwMajorMinor.fwMinorRev);
+        auto hotfix = std::to_string(getDevIdResp->fwMajorMinor.fwHotfixRev);
+        auto build = std::to_string(getDevIdResp->fwVerAux.a) +
+                     std::to_string(getDevIdResp->fwVerAux.b) +
+                     std::to_string(getDevIdResp->fwVerAux.c);
+        auto patch = std::to_string(getDevIdResp->fwVerAux.patch);
+
+        return major + '.' + minor + '.' + hotfix + '.' + build + '.' + patch;
     }
 
   private:
