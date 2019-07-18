@@ -140,5 +140,51 @@ int getProvisioningStatus(bool& ufmLocked, bool& ufmProvisioned)
     }
 }
 
+int readCpldReg(const ActionType& action, uint8_t value)
+{
+    uint8_t cpldReg;
+
+    switch (action)
+    {
+        case (ActionType::recoveryCount):
+            cpldReg = recoveryCount;
+            break;
+        case (ActionType::recoveryReason):
+            cpldReg = lastRecoveryReason;
+            break;
+        case (ActionType::panicCount):
+            cpldReg = panicEventCount;
+            break;
+        case (ActionType::panicReason):
+            cpldReg = panicEventReason;
+            break;
+        case (ActionType::majorError):
+            cpldReg = majorErrorCode;
+            break;
+        case (ActionType::minorError):
+            cpldReg = minorErrorCode;
+            break;
+
+        default:
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Invalid CPLD read action.");
+            return -1;
+    }
+
+    try
+    {
+        I2CFile cpldDev(i2cBusNumber, i2cSlaveAddress, O_RDWR | O_CLOEXEC);
+        value = cpldDev.i2cReadByteData(cpldReg);
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Exception caught in readCpldReg.",
+            phosphor::logging::entry("MSG=%s", e.what()));
+        return -1;
+    }
+}
+
 } // namespace pfr
 } // namespace intel

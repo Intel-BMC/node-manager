@@ -31,8 +31,19 @@ enum class ImageType
     bmcRecovery
 };
 
+enum class ActionType
+{
+    recoveryCount,
+    recoveryReason,
+    panicCount,
+    panicReason,
+    majorError,
+    minorError
+};
+
 std::string getVersionInfoCPLD(ImageType &imgType);
 int getProvisioningStatus(bool &ufmLocked, bool &ufmProvisioned);
+int readCpldReg(const ActionType &action, uint8_t value);
 
 } // namespace pfr
 } // namespace intel
