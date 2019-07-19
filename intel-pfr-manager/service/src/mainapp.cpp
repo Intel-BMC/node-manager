@@ -20,9 +20,6 @@
 #include "pfr.hpp"
 #include <boost/asio.hpp>
 
-static std::array<std::string, 5> listVersionPaths = {
-    "bmc_active", "bmc_recovery", "bios_active", "bios_recovery", "cpld"};
-
 // Caches the last Recovery/Panic Count to
 // identify any new Recovery/panic actions.
 /* TODO: When BMC Reset's, these values will be lost
@@ -38,6 +35,22 @@ static constexpr uint8_t bmcBootFinishedChkPoint = 0x09;
 
 std::unique_ptr<boost::asio::steady_timer> stateTimer = nullptr;
 std::unique_ptr<boost::asio::steady_timer> initTimer = nullptr;
+
+std::vector<std::unique_ptr<intel::pfr::PfrVersion>> pfrVersionObjects;
+std::unique_ptr<intel::pfr::PfrConfig> pfrConfigObject;
+
+using namespace intel::pfr;
+// List holds <ObjPath> <ImageType> <VersionPurpose>
+static std::vector<std::tuple<std::string, ImageType, std::string>>
+    verComponentList = {
+        std::make_tuple("bmc_active", ImageType::bmcActive, versionPurposeBMC),
+        std::make_tuple("bmc_recovery", ImageType::bmcRecovery,
+                        versionPurposeBMC),
+        std::make_tuple("bios_active", ImageType::biosActive,
+                        versionPurposeHost),
+        std::make_tuple("bios_recovery", ImageType::biosRecovery,
+                        versionPurposeHost),
+        std::make_tuple("cpld", ImageType::cpld, versionPurposeOther)};
 
 // Recovery reason map. { <CPLD association>, <Recovery Reason> }
 static std::map<uint8_t, std::string> recoveryReasonMap = {
@@ -70,6 +83,20 @@ static std::map<uint8_t, std::string> panicReasonMap = {
     {0x0F, "BMC active update intent"},
     {0x10, "PCH recovery update intent"},
     {0x11, "BMC recovery update intent"}};
+
+static void updateDbusPropertiesCache()
+{
+    for (const auto& pfrVerObj : pfrVersionObjects)
+    {
+        pfrVerObj->updateVersion();
+    }
+
+    // Update provisoningStatus properties
+    pfrConfigObject->updateProvisioningStatus();
+
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "PFR Manager service cache data updated.");
+}
 
 static void logLastRecoveryEvent()
 {
@@ -249,15 +276,18 @@ int main()
     stateTimer = std::make_unique<boost::asio::steady_timer>(io);
     initTimer = std::make_unique<boost::asio::steady_timer>(io);
     conn->request_name("xyz.openbmc_project.Intel.PFR.Manager");
-    auto server = sdbusplus::asio::object_server(conn, true);
+    auto server = sdbusplus::asio::object_server(conn);
 
     // Create Intel PFR attributes object and interface
-    intel::pfr::PfrConfig obj(server, conn);
+    pfrConfigObject = std::make_unique<intel::pfr::PfrConfig>(server, conn);
 
+    pfrVersionObjects.clear();
     // Create Software objects using Versions interface
-    for (const auto& path : listVersionPaths)
+    for (const auto& entry : verComponentList)
     {
-        intel::pfr::PfrVersion obj(server, conn, path);
+        pfrVersionObjects.emplace_back(std::make_unique<intel::pfr::PfrVersion>(
+            server, conn, std::get<0>(entry), std::get<1>(entry),
+            std::get<2>(entry)));
     }
 
     // Monitor Boot finished signal and set the checkpoint 9 to
@@ -313,6 +343,9 @@ int main()
                         stateTimerRunning = false;
                     }
                 }
+
+                // Update the D-Bus properties when chassis state changes.
+                updateDbusPropertiesCache();
             }
         });
 
@@ -355,6 +388,9 @@ int main()
                         stateTimerRunning = false;
                     }
                 }
+
+                // Update the D-Bus properties when host state changes.
+                updateDbusPropertiesCache();
             }
         });
 
