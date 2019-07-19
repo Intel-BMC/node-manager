@@ -75,6 +75,21 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
     iface->register_property("Version", version);
 
     iface->initialize();
+
+    /* Activation interface represents activation state for an associated
+     * xyz.openbmc_project.Software.Version. since these versions are already
+     * active, so we should set "activation" to Active and
+     * "RequestedActivation" to None. */
+    std::string activation =
+        "xyz.openbmc_project.Software.Activation.Activations.Active";
+    std::string reqActNone =
+        "xyz.openbmc_project.Software.Activation.RequestedActivations.None";
+    auto activationIface = server.add_interface(
+        objPath, "xyz.openbmc_project.Software.Activation");
+    activationIface->register_property("Activation", activation);
+    activationIface->register_property("RequestedActivation", reqActNone);
+
+    activationIface->initialize();
 }
 
 bool PfrConfig::getPFRProvisionedState()
