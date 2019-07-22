@@ -196,6 +196,12 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("Enabled", true);
 
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/state/chassis0",
+                                     "xyz.openbmc_project.State.PowerOnHours");
+
+    setting->addProperty("POHCounter", static_cast<uint32_t>(0));
+
     setting = &settings.emplace_back(
         objectServer,
         "/xyz/openbmc_project/control/chassis_capabilities_config",
