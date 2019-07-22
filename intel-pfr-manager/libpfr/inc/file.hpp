@@ -89,6 +89,25 @@ class I2CFile
         return value;
     }
 
+    /** @brief Writes the byte data to I2C dev
+     *
+     *  @param[in] Offset       -  Offset value
+     *  @param[in] Byte data    -  Data
+     */
+    void i2cWriteByteData(const uint8_t offset, const uint8_t value)
+    {
+        int retries = 3;
+        while (i2c_smbus_write_byte_data(fd, offset, value) < 0)
+        {
+            if (!retries--)
+            {
+                throw std::runtime_error("i2c_smbus_write_byte_data() failed");
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return;
+    }
+
     ~I2CFile()
     {
         if (!(fd < 0))

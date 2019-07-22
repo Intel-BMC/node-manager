@@ -18,6 +18,7 @@
 
 #include "pfr_mgr.hpp"
 #include "pfr.hpp"
+#include <boost/asio.hpp>
 
 static std::array<std::string, 5> listVersionPaths = {
     "bmc_active", "bmc_recovery", "bios_active", "bios_recovery", "cpld"};
@@ -32,7 +33,11 @@ static uint8_t lastMajorErr = 0;
 static uint8_t lastMinorErr = 0;
 
 static bool stateTimerRunning = false;
+bool finishedSettingChkPoint = false;
+static constexpr uint8_t bmcBootFinishedChkPoint = 0x09;
+
 std::unique_ptr<boost::asio::steady_timer> stateTimer = nullptr;
+std::unique_ptr<boost::asio::steady_timer> initTimer = nullptr;
 
 // Recovery reason map. { <CPLD association>, <Recovery Reason> }
 static std::map<uint8_t, std::string> recoveryReasonMap = {
@@ -185,12 +190,64 @@ static void monitorPlatformStateChange(
         });
 }
 
+void checkAndSetCheckpoint(sdbusplus::asio::object_server& server,
+                           std::shared_ptr<sdbusplus::asio::connection>& conn)
+{
+    // Check whether systemd completed all the loading.
+    conn->async_method_call(
+        [&server, &conn](boost::system::error_code ec,
+                         const std::variant<uint64_t>& value) {
+            if (ec)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "async_method_call error: FinishTimestamp failed");
+                return;
+            }
+            if (std::get<uint64_t>(value))
+            {
+                if (!finishedSettingChkPoint)
+                {
+                    finishedSettingChkPoint = true;
+                    intel::pfr::setBMCBootCheckpoint(bmcBootFinishedChkPoint);
+                }
+            }
+            else
+            {
+                // FIX-ME: Latest up-stream sync caused issue in receiving
+                // StartupFinished signal. Unable to get StartupFinished signal
+                // from systemd1 hence using poll method too, to trigger it
+                // properly.
+                constexpr size_t pollTimeout = 10; // seconds
+                initTimer->expires_after(std::chrono::seconds(pollTimeout));
+                initTimer->async_wait([&server, &conn](
+                                          const boost::system::error_code& ec) {
+                    if (ec == boost::asio::error::operation_aborted)
+                    {
+                        // Timer reset.
+                        return;
+                    }
+                    if (ec)
+                    {
+                        phosphor::logging::log<phosphor::logging::level::ERR>(
+                            "Set boot Checkpoint - async wait error.");
+                        return;
+                    }
+                    checkAndSetCheckpoint(server, conn);
+                });
+            }
+        },
+        "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+        "org.freedesktop.DBus.Properties", "Get",
+        "org.freedesktop.systemd1.Manager", "FinishTimestamp");
+}
+
 int main()
 {
     // setup connection to dbus
     boost::asio::io_service io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
     stateTimer = std::make_unique<boost::asio::steady_timer>(io);
+    initTimer = std::make_unique<boost::asio::steady_timer>(io);
     conn->request_name("xyz.openbmc_project.Intel.PFR.Manager");
     auto server = sdbusplus::asio::object_server(conn, true);
 
@@ -202,6 +259,22 @@ int main()
     {
         intel::pfr::PfrVersion obj(server, conn, path);
     }
+
+    // Monitor Boot finished signal and set the checkpoint 9 to
+    // notify CPLD about BMC boot finish.
+    auto bootFinishedSignal = std::make_unique<sdbusplus::bus::match::match>(
+        static_cast<sdbusplus::bus::bus&>(*conn),
+        "type='signal',"
+        "member='StartupFinished',path='/org/freedesktop/systemd1',"
+        "interface='org.freedesktop.systemd1.Manager'",
+        [&server, &conn](sdbusplus::message::message& msg) {
+            if (!finishedSettingChkPoint)
+            {
+                finishedSettingChkPoint = true;
+                intel::pfr::setBMCBootCheckpoint(bmcBootFinishedChkPoint);
+            }
+        });
+    checkAndSetCheckpoint(server, conn);
 
     // Capture the Chassis state and Start the monitor timer
     // if state changed to 'On'. Run timer until  OS boot.

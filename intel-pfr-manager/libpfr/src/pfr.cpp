@@ -41,6 +41,7 @@ static constexpr uint8_t panicEventReason = 0x07;
 static constexpr uint8_t majorErrorCode = 0x08;
 static constexpr uint8_t minorErrorCode = 0x09;
 static constexpr uint8_t provisioningStatus = 0x0A;
+static constexpr uint8_t bmcBootCheckpoint = 0x0F;
 static constexpr uint8_t pchActiveMajorVersion = 0x17;
 static constexpr uint8_t pchActiveMinorVersion = 0x18;
 static constexpr uint8_t bmcActiveMajorVersion = 0x19;
@@ -181,6 +182,23 @@ int readCpldReg(const ActionType& action, uint8_t value)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Exception caught in readCpldReg.",
+            phosphor::logging::entry("MSG=%s", e.what()));
+        return -1;
+    }
+}
+
+int setBMCBootCheckpoint(const uint8_t checkPoint)
+{
+    try
+    {
+        I2CFile cpldDev(i2cBusNumber, i2cSlaveAddress, O_RDWR | O_CLOEXEC);
+        cpldDev.i2cWriteByteData(bmcBootCheckpoint, checkPoint);
+        return 0;
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Exception caught in setBMCBootCheckout.",
             phosphor::logging::entry("MSG=%s", e.what()));
         return -1;
     }
