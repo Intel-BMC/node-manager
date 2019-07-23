@@ -23,9 +23,9 @@ static constexpr const char* strSpecialMode = "SpecialMode";
 
 enum SpecialMode : uint8_t
 {
-    None = 0,
-    ManufacturingExpired = 1,
-    ManufacturingMode = 2
+    none = 0,
+    manufacturingExpired = 1,
+    manufacturingMode = 2
 };
 
 class SpecialModeMgr
@@ -34,14 +34,20 @@ class SpecialModeMgr
     sdbusplus::asio::object_server& server;
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
-    uint8_t specialMode = None;
+    uint8_t specialMode = none;
     std::unique_ptr<boost::asio::deadline_timer> timer = nullptr;
-    void AddSpecialModeProperty();
+    std::unique_ptr<sdbusplus::bus::match::match> intfAddMatchRule = nullptr;
+    std::unique_ptr<sdbusplus::bus::match::match> propUpdMatchRule = nullptr;
+    void addSpecialModeProperty();
+    void checkAndAddSpecialModeProperty(const std::string& provMode);
 
   public:
-    uint8_t SetSpecialModeValue(uint8_t value) const
+    void setSpecialModeValue(uint8_t value) const
     {
-        return iface->set_property(strSpecialMode, value);
+        if (iface != nullptr && iface->is_initialized())
+        {
+            iface->set_property(strSpecialMode, value);
+        }
     }
     SpecialModeMgr(boost::asio::io_service& io,
                    sdbusplus::asio::object_server& srv,
