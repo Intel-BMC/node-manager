@@ -397,6 +397,7 @@ void MDR_V2::systemInfoUpdate()
             bus, path, index, smbiosDir.dir[smbiosDirIndex].dataStorage));
     }
 
+    system.reset();
     system = std::make_unique<System>(
         bus, systemPath, smbiosDir.dir[smbiosDirIndex].dataStorage);
 }
