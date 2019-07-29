@@ -283,6 +283,12 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("ACBoot", "Unknown", false);
 
+    setting = &settings.emplace_back(
+        objectServer, "/xyz/openbmc_project/Inventory/Item/Dimm",
+        "xyz.openbmc_project.Inventory.Item.Dimm.Offset");
+
+    setting->addProperty("DimmOffset", std::vector<uint8_t>{});
+
     for (SettingsInterface &s : settings)
     {
         s.initialize();
