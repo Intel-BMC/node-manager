@@ -18,7 +18,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/container/flat_set.hpp>
-#include <coldRedundancy.hpp>
+#include <cold_redundancy.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -45,7 +45,8 @@ ColdRedundancy::ColdRedundancy(
     std::shared_ptr<sdbusplus::asio::connection>& systemBus) :
     sdbusplus::xyz::openbmc_project::Control::server::PowerSupplyRedundancy(
         *systemBus, coldRedundancyPath),
-    timerRotation(io), timerCheck(io), systemBus(systemBus)
+    timerRotation(io), timerCheck(io), systemBus(systemBus),
+    warmRedundantTimer1(io), warmRedundantTimer2(io)
 {
     io.post([this, &io, &objectServer, &systemBus]() {
         createPSU(io, objectServer, systemBus);
@@ -58,8 +59,8 @@ ColdRedundancy::ColdRedundancy(
                 std::cerr << "callback method error\n";
                 return;
             }
-            boost::asio::deadline_timer filterTimer(io);
-            filterTimer.expires_from_now(boost::posix_time::seconds(1));
+            boost::asio::steady_timer filterTimer(io);
+            filterTimer.expires_after(std::chrono::seconds(1));
             filterTimer.async_wait([this, &io, &objectServer, &systemBus](
                                        const boost::system::error_code& ec) {
                 if (ec == boost::asio::error::operation_aborted)
@@ -184,6 +185,8 @@ void ColdRedundancy::createPSU(
         "xyz.openbmc_project.ObjectMapper", "GetSubTree",
         "/xyz/openbmc_project/inventory/system/powersupply", 2,
         psuInterfaceTypes);
+    startRotateCR();
+    startCRCheck();
 }
 
 PowerSupply::PowerSupply(
@@ -196,6 +199,216 @@ PowerSupply::PowerSupply(
     if (debug)
     {
         std::cerr << "psu state " << static_cast<int>(state) << "\n";
+    }
+}
+
+// Reranking PSU orders with ascending order, if any of the PSU is not in
+// normal state, changing rotation algo to bmc specific, and Reranking all
+// other normal PSU. If all PSU are in normal state, and rotation algo is
+// user specific, do nothing.
+void ColdRedundancy::reRanking(void)
+{
+    uint8_t index = 1;
+    if (rotationAlgo == bmcSpecific)
+    {
+        for (auto& psu : powerSupplies)
+        {
+            if (psu->state == PSUState::normal)
+            {
+                psu->order = (index++);
+            }
+            else
+            {
+                psu->order = 0;
+            }
+        }
+    }
+    else
+    {
+        for (auto& psu : powerSupplies)
+        {
+            if (psu->state == PSUState::acLost)
+            {
+                rotationAlgo = bmcSpecific;
+                reRanking();
+                return;
+            }
+        }
+    }
+}
+
+void ColdRedundancy::configCR(bool reConfig)
+{
+    if (!crSupported || !crEnabled)
+    {
+        return;
+    }
+    putWarmRedundant();
+    warmRedundantTimer2.expires_after(std::chrono::seconds(5));
+    warmRedundantTimer2.async_wait([this, reConfig](
+                                       const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        else if (ec)
+        {
+            std::cerr << "warm redundant timer error\n";
+            return;
+        }
+
+        if (reConfig)
+        {
+            reRanking();
+        }
+
+        for (auto& psu : powerSupplies)
+        {
+            if (psu->state == PSUState::normal && psu->order != 0)
+            {
+                if (i2cSet(psu->bus, psu->address, pmbusCmdCRSupport,
+                           psu->order))
+                {
+                    std::cerr << "Failed to change PSU Cold Redundancy order\n";
+                }
+            }
+        }
+    });
+}
+
+void ColdRedundancy::checkCR(void)
+{
+    if (!crSupported)
+    {
+        return;
+    }
+    if (!crEnabled)
+    {
+        putWarmRedundant();
+        return;
+    }
+
+    for (auto& psu : powerSupplies)
+    {
+        if (psu->state == PSUState::normal)
+        {
+            uint8_t order = 0;
+            if (i2cGet(psu->bus, psu->address, pmbusCmdCRSupport, order))
+            {
+                std::cerr << "Failed to get PSU Cold Redundancy order\n";
+                continue;
+            }
+            if (order == 0)
+            {
+                configCR(true);
+                return;
+            }
+        }
+    }
+}
+
+void ColdRedundancy::startCRCheck()
+{
+    timerCheck.expires_after(std::chrono::seconds(60));
+    timerCheck.async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        else if (ec)
+        {
+            std::cerr << "timer error\n";
+        }
+        if (crSupported)
+        {
+            checkCR();
+        }
+        startCRCheck();
+    });
+}
+
+// Rotate the orders of PSU redundancy. Each normal PSU will add one to its
+// rank order. And the PSU with last rank order will become the rank order 1
+void ColdRedundancy::rotateCR(void)
+{
+    if (!crSupported || !crEnabled)
+    {
+        return;
+    }
+    putWarmRedundant();
+    warmRedundantTimer1.expires_after(std::chrono::seconds(5));
+    warmRedundantTimer1.async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        else if (ec)
+        {
+            std::cerr << "warm redundant timer error\n";
+            return;
+        }
+
+        int goodPSUCount = 0;
+
+        for (auto& psu : powerSupplies)
+        {
+            if (psu->state == PSUState::normal)
+            {
+                goodPSUCount++;
+            }
+        }
+
+        for (auto& psu : powerSupplies)
+        {
+            if (psu->order == 0)
+            {
+                continue;
+            }
+            psu->order++;
+            if (psu->order > goodPSUCount)
+            {
+                psu->order = 1;
+            }
+            if (i2cSet(psu->bus, psu->address, pmbusCmdCRSupport, psu->order))
+            {
+                std::cerr << "Failed to change PSU Cold Redundancy order\n";
+            }
+        }
+    });
+}
+
+void ColdRedundancy::startRotateCR()
+{
+    timerRotation.expires_after(std::chrono::seconds(rotationPeriod));
+    timerRotation.async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        else if (ec)
+        {
+            std::cerr << "timer error\n";
+        }
+        if (crSupported && rotationEnabled)
+        {
+            rotateCR();
+        }
+        startRotateCR();
+    });
+}
+
+void ColdRedundancy::putWarmRedundant(void)
+{
+    if (!crSupported)
+    {
+        return;
+    }
+    for (auto& psu : powerSupplies)
+    {
+        if (psu->state == PSUState::normal)
+        {
+            i2cSet(psu->bus, psu->address, pmbusCmdCRSupport, 0);
+        }
     }
 }
 
