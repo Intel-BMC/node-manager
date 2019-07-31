@@ -30,6 +30,10 @@ static constexpr const char* specialModePath =
     "/xyz/openbmc_project/security/specialMode";
 static constexpr const char* provisioningMode =
     "xyz.openbmc_project.Control.Security.RestrictionMode.Modes.Provisioning";
+static constexpr const char* restrictionModeService =
+    "xyz.openbmc_project.RestrictionMode.Manager";
+static constexpr const char* restrictionModeIntf =
+    "xyz.openbmc_project.Control.Security.RestrictionMode";
 
 static constexpr const char* restrictionModeProperty = "RestrictionMode";
 
@@ -60,75 +64,144 @@ SpecialModeMgr::SpecialModeMgr(
     if ((cmdLineStr.find(specialModeStr) != std::string::npos) &&
         (cmdLineStr.find(acBootStr) != std::string::npos))
     {
+        intfAddMatchRule = std::make_unique<sdbusplus::bus::match::match>(
+            static_cast<sdbusplus::bus::bus&>(*conn),
+            "type='signal',member='InterfacesAdded',sender='" +
+                std::string(restrictionModeService) + "'",
+            [this](sdbusplus::message::message& message) {
+                sdbusplus::message::object_path objectPath;
+                std::map<std::string, std::map<std::string, VariantValue>>
+                    objects;
+                message.read(objectPath, objects);
+                VariantValue mode;
+                try
+                {
+                    std::map<std::string, VariantValue> prop =
+                        objects.at(restrictionModeIntf);
+                    mode = prop.at(restrictionModeProperty);
+                }
+                catch (const std::out_of_range& e)
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Error in finding RestrictionMode property");
+
+                    return;
+                }
+                checkAndAddSpecialModeProperty(std::get<std::string>(mode));
+            });
+
+        propUpdMatchRule = std::make_unique<sdbusplus::bus::match::match>(
+            static_cast<sdbusplus::bus::bus&>(*conn),
+            "type='signal',member='PropertiesChanged', "
+            "interface='org.freedesktop.DBus.Properties', "
+            "arg0namespace='xyz.openbmc_project.Control.Security."
+            "RestrictionMode'",
+            [this](sdbusplus::message::message& message) {
+                std::string intfName;
+                std::map<std::string, std::variant<std::string>> properties;
+
+                // Skip reading 3rd argument (old porperty value)
+                message.read(intfName, properties);
+
+                std::variant<std::string> mode;
+                try
+                {
+                    mode = properties.at(restrictionModeProperty);
+                }
+
+                catch (const std::out_of_range& e)
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Error in finding RestrictionMode property");
+
+                    return;
+                }
+
+                if (std::get<std::string>(mode) != provisioningMode)
+                {
+                    phosphor::logging::log<phosphor::logging::level::INFO>(
+                        "Mode is not provisioning");
+                    setSpecialModeValue(manufacturingExpired);
+                }
+            });
+
         conn->async_method_call(
             [this](boost::system::error_code ec, const VariantValue& mode) {
                 if (ec)
                 {
                     phosphor::logging::log<phosphor::logging::level::INFO>(
-                        "ERROR with async_method_call");
-                    AddSpecialModeProperty();
+                        "Error in reading restrictionMode property, probably "
+                        "service not up");
                     return;
                 }
-                if (std::get<std::string>(mode) != provisioningMode)
-                {
-                    AddSpecialModeProperty();
-                    return;
-                }
-                struct sysinfo sysInfo = {};
-                int ret = sysinfo(&sysInfo);
-                if (ret != 0)
-                {
-                    phosphor::logging::log<phosphor::logging::level::INFO>(
-                        "ERROR in getting sysinfo",
-                        phosphor::logging::entry("RET = %d", ret));
-                    AddSpecialModeProperty();
-                    return;
-                }
-                constexpr int mtmAllowedTime = 12 * 60 * 60; // 12 hours
-                int specialModeLockoutSeconds = 0;
-                if (mtmAllowedTime > sysInfo.uptime)
-                {
-                    specialMode = ManufacturingMode;
-                    specialModeLockoutSeconds = mtmAllowedTime - sysInfo.uptime;
-                }
-                AddSpecialModeProperty();
-                if (!specialModeLockoutSeconds)
-                {
-                    return;
-                }
-                timer->expires_from_now(
-                    boost::posix_time::seconds(specialModeLockoutSeconds));
-                timer->async_wait([this](const boost::system::error_code& ec) {
-                    if (ec == boost::asio::error::operation_aborted)
-                    {
-                        // timer aborted
-                        return;
-                    }
-                    else if (ec)
-                    {
-                        phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "Error in special mode "
-                            "timer");
-                        return;
-                    }
-                    iface->set_property(
-                        strSpecialMode,
-                        static_cast<uint8_t>(ManufacturingExpired));
-                });
+                checkAndAddSpecialModeProperty(std::get<std::string>(mode));
             },
-            "xyz.openbmc_project.RestrictionMode.Manager",
+            restrictionModeService,
             "/xyz/openbmc_project/control/security/restriction_mode",
-            "org.freedesktop.DBus.Properties", "Get",
-            "xyz.openbmc_project.Control.Security.RestrictionMode",
+            "org.freedesktop.DBus.Properties", "Get", restrictionModeIntf,
             restrictionModeProperty);
     }
     else
     {
-        AddSpecialModeProperty();
+        addSpecialModeProperty();
     }
 }
 
-void SpecialModeMgr::AddSpecialModeProperty()
+void SpecialModeMgr::checkAndAddSpecialModeProperty(const std::string& provMode)
+{
+    if (iface != nullptr && iface->is_initialized())
+    {
+        // Already initialized
+        return;
+    }
+    if (provMode != provisioningMode)
+    {
+        addSpecialModeProperty();
+        return;
+    }
+    struct sysinfo sysInfo = {};
+    int ret = sysinfo(&sysInfo);
+    if (ret != 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ERROR in getting sysinfo",
+            phosphor::logging::entry("RET = %d", ret));
+        addSpecialModeProperty();
+        return;
+    }
+    constexpr int mtmAllowedTime = 12 * 60 * 60; // 12 hours
+    int specialModeLockoutSeconds = 0;
+    if (mtmAllowedTime > sysInfo.uptime)
+    {
+        specialMode = manufacturingMode;
+        specialModeLockoutSeconds = mtmAllowedTime - sysInfo.uptime;
+    }
+    addSpecialModeProperty();
+    if (!specialModeLockoutSeconds)
+    {
+        return;
+    }
+    timer->expires_from_now(
+        boost::posix_time::seconds(specialModeLockoutSeconds));
+    timer->async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            // timer aborted
+            return;
+        }
+        else if (ec)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error in special mode "
+                "timer");
+            return;
+        }
+        iface->set_property(strSpecialMode,
+                            static_cast<uint8_t>(manufacturingExpired));
+    });
+}
+
+void SpecialModeMgr::addSpecialModeProperty()
 {
     // Add path to server object
     iface = server.add_interface(specialModePath, specialModeIntf);
@@ -136,7 +209,7 @@ void SpecialModeMgr::AddSpecialModeProperty()
         strSpecialMode, specialMode,
         // Ignore set
         [this](const uint8_t& req, uint8_t& propertyValue) {
-            if (req == ManufacturingExpired && specialMode != req)
+            if (req == manufacturingExpired && specialMode != req)
             {
                 specialMode = req;
                 propertyValue = req;
@@ -154,43 +227,11 @@ int main()
     boost::asio::io_service io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
     conn->request_name(specialModeMgrService);
-    sdbusplus::asio::object_server server(conn);
+    sdbusplus::asio::object_server server(conn, true);
+    auto mgrIntf = server.add_interface(specialModePath, "");
+    mgrIntf->initialize();
+    server.add_manager(specialModePath);
 
-    SpecialModeMgr specilModeMgr(io, server, conn);
-
-    static auto match = sdbusplus::bus::match::match(
-        static_cast<sdbusplus::bus::bus&>(*conn),
-        "type='signal',member='PropertiesChanged', "
-        "interface='org.freedesktop.DBus.Properties', "
-        "arg0namespace='xyz.openbmc_project.Control.Security.RestrictionMode'",
-        [&specilModeMgr](sdbusplus::message::message& message) {
-            std::string intfName;
-            std::map<std::string, std::variant<std::string>> properties;
-
-            message.read(intfName,
-                         properties); // skipping reading of 3rd argument
-
-            std::variant<std::string> mode;
-
-            try
-            {
-                mode = properties.at(restrictionModeProperty);
-            }
-            catch (const std::out_of_range& e)
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "Error in finding RestrictionMode property");
-
-                throw std::out_of_range("Out of range");
-            }
-            if (std::get<std::string>(mode) != provisioningMode)
-            {
-                phosphor::logging::log<phosphor::logging::level::INFO>(
-                    "Mode is not provisioning ");
-
-                specilModeMgr.SetSpecialModeValue(ManufacturingExpired);
-            }
-        });
-
+    SpecialModeMgr specialModeMgr(io, server, conn);
     io.run();
 }
