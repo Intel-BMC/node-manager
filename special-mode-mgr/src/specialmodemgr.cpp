@@ -36,6 +36,7 @@ static constexpr const char* restrictionModeIntf =
     "xyz.openbmc_project.Control.Security.RestrictionMode";
 
 static constexpr const char* restrictionModeProperty = "RestrictionMode";
+static constexpr int mtmAllowedTime = 15 * 60; // 15 minutes
 
 using VariantValue =
     std::variant<bool, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t,
@@ -46,7 +47,7 @@ SpecialModeMgr::SpecialModeMgr(
     std::shared_ptr<sdbusplus::asio::connection>& conn_) :
     io(io_),
     server(srv_), conn(conn_),
-    timer(std::make_unique<boost::asio::deadline_timer>(io))
+    timer(std::make_unique<boost::asio::steady_timer>(io))
 {
 
     // Following condition must match to indicate specialMode.
@@ -169,7 +170,6 @@ void SpecialModeMgr::checkAndAddSpecialModeProperty(const std::string& provMode)
         addSpecialModeProperty();
         return;
     }
-    constexpr int mtmAllowedTime = 12 * 60 * 60; // 12 hours
     int specialModeLockoutSeconds = 0;
     if (mtmAllowedTime > sysInfo.uptime)
     {
@@ -181,24 +181,7 @@ void SpecialModeMgr::checkAndAddSpecialModeProperty(const std::string& provMode)
     {
         return;
     }
-    timer->expires_from_now(
-        boost::posix_time::seconds(specialModeLockoutSeconds));
-    timer->async_wait([this](const boost::system::error_code& ec) {
-        if (ec == boost::asio::error::operation_aborted)
-        {
-            // timer aborted
-            return;
-        }
-        else if (ec)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Error in special mode "
-                "timer");
-            return;
-        }
-        iface->set_property(strSpecialMode,
-                            static_cast<uint8_t>(manufacturingExpired));
-    });
+    updateTimer(specialModeLockoutSeconds);
 }
 
 void SpecialModeMgr::addSpecialModeProperty()
@@ -219,7 +202,34 @@ void SpecialModeMgr::addSpecialModeProperty()
         },
         // Override get
         [this](const uint8_t& mode) { return specialMode; });
+    iface->register_method("ResetTimer", [this]() {
+        if (specialMode == manufacturingMode)
+        {
+            updateTimer(mtmAllowedTime);
+        }
+        return;
+    });
     iface->initialize(true);
+}
+
+void SpecialModeMgr::updateTimer(int countInSeconds)
+{
+    timer->expires_after(std::chrono::seconds(countInSeconds));
+    timer->async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            // timer aborted
+            return;
+        }
+        else if (ec)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error in special mode timer");
+            return;
+        }
+        iface->set_property(strSpecialMode,
+                            static_cast<uint8_t>(manufacturingExpired));
+    });
 }
 
 int main()
