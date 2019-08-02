@@ -27,7 +27,7 @@ static constexpr const char* specialModeMgrService =
 static constexpr const char* specialModeIntf =
     "xyz.openbmc_project.Security.SpecialMode";
 static constexpr const char* specialModePath =
-    "/xyz/openbmc_project/security/specialMode";
+    "/xyz/openbmc_project/security/special_mode";
 static constexpr const char* provisioningMode =
     "xyz.openbmc_project.Control.Security.RestrictionMode.Modes.Provisioning";
 static constexpr const char* restrictionModeService =
