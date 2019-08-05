@@ -14,7 +14,7 @@
 // limitations under the License.
 */
 
-#include <coldRedundancy.hpp>
+#include <cold_redundancy.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
 int main(int argc, char** argv)

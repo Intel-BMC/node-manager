@@ -47,11 +47,21 @@ class ColdRedundancy
     uint8_t numberOfPSU = 0;
     uint32_t rotationPeriod = 7 * secondsInOneDay;
 
+    void startRotateCR(void);
+    void startCRCheck(void);
+    void rotateCR(void);
+    void configCR(bool reConfig);
+    void checkCR(void);
+    void reRanking(void);
+    void putWarmRedundant();
+
     std::shared_ptr<sdbusplus::asio::connection>& systemBus;
 
     std::vector<std::unique_ptr<sdbusplus::bus::match::match>> matches;
-    boost::asio::deadline_timer timerRotation;
-    boost::asio::deadline_timer timerCheck;
+    boost::asio::steady_timer timerRotation;
+    boost::asio::steady_timer timerCheck;
+    boost::asio::steady_timer warmRedundantTimer1;
+    boost::asio::steady_timer warmRedundantTimer2;
 };
 
 constexpr const uint8_t pmbusCmdCRSupport = 0xd0;

@@ -13,7 +13,7 @@ include_directories (
 
 project (psumanager CXX)
 
-set (PSU_CR_SRC_FILES src/utility.cpp src/coldRedundancy.cpp)
+set (PSU_CR_SRC_FILES src/utility.cpp src/cold_redundancy.cpp)
 
 set (EXTERNAL_PACKAGES Boost sdbusplus-project nlohmann-json)
 set (CR_LINK_LIBS -lsystemd stdc++fs sdbusplus)
@@ -35,7 +35,7 @@ link_directories (${SDBUSPLUSPLUS_LIBRARY_DIRS})
 include_directories (${DBUSINTERFACE_INCLUDE_DIRS})
 link_directories (${DBUSINTERFACE_LIBRARY_DIRS})
 
-add_executable (psuredundancy ${PSU_CR_SRC_FILES} src/redundancyMain.cpp)
+add_executable (psuredundancy ${PSU_CR_SRC_FILES} src/redundancy_main.cpp)
 add_dependencies (psuredundancy sdbusplus-project)
 target_link_libraries (psuredundancy ${CR_LINK_LIBS})
 target_link_libraries (psuredundancy i2c)
