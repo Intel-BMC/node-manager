@@ -7,7 +7,7 @@ add_executable (host-error-monitor src/host_error_monitor.cpp)
 
 target_include_directories (host-error-monitor PRIVATE ${CMAKE_SOURCE_DIR})
 
-target_link_libraries (host-error-monitor sdbusplus -lsystemd gpiodcxx)
+target_link_libraries (host-error-monitor sdbusplus -lsystemd gpiodcxx peci)
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
