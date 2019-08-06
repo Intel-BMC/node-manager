@@ -22,6 +22,7 @@
 #include <gpiod.hpp>
 #include <iostream>
 #include <sdbusplus/asio/object_server.hpp>
+#include <variant>
 
 namespace host_error_monitor
 {
@@ -284,6 +285,54 @@ static void startCrashdumpAndRecovery(bool recoverSystem)
         "com.intel.crashdump.Stored", "GenerateStoredLog");
 }
 
+static void incrementCPUErrorCount(int cpuNum)
+{
+    std::string propertyName = "ErrorCountCPU" + std::to_string(cpuNum + 1);
+
+    // Get the current count
+    conn->async_method_call(
+        [propertyName](boost::system::error_code ec,
+                       const std::variant<uint8_t>& property) {
+            if (ec)
+            {
+                std::cerr << "Failed to read " << propertyName << ": "
+                          << ec.message() << "\n";
+                return;
+            }
+            const uint8_t* errorCountVariant = std::get_if<uint8_t>(&property);
+            if (errorCountVariant == nullptr)
+            {
+                std::cerr << propertyName << " invalid\n";
+                return;
+            }
+            uint8_t errorCount = *errorCountVariant;
+            if (errorCount == std::numeric_limits<uint8_t>::max())
+            {
+                std::cerr << "Maximum error count reached\n";
+                return;
+            }
+            // Increment the count
+            errorCount++;
+            conn->async_method_call(
+                [propertyName](boost::system::error_code ec) {
+                    if (ec)
+                    {
+                        std::cerr << "Failed to set " << propertyName << ": "
+                                  << ec.message() << "\n";
+                    }
+                },
+                "xyz.openbmc_project.Settings",
+                "/xyz/openbmc_project/control/processor_error_config",
+                "org.freedesktop.DBus.Properties", "Set",
+                "xyz.openbmc_project.Control.Processor.ErrConfig", propertyName,
+                std::variant<uint8_t>{errorCount});
+        },
+        "xyz.openbmc_project.Settings",
+        "/xyz/openbmc_project/control/processor_error_config",
+        "org.freedesktop.DBus.Properties", "Get",
+        "xyz.openbmc_project.Control.Processor.ErrConfig", propertyName);
+}
+
 static bool checkIERRCPUs()
 {
     bool cpuIERRFound = false;
@@ -339,6 +388,7 @@ static bool checkIERRCPUs()
                 {
                     // TODO: Light the CPU fault LED?
                     cpuIERRFound = true;
+                    incrementCPUErrorCount(cpu);
                     // Next check if it's a CPU/VR mismatch by reading the
                     // IA32_MC4_STATUS MSR (0x411)
                     uint64_t mc4Status = 0;
@@ -424,6 +474,7 @@ static bool checkIERRCPUs()
                 {
                     // TODO: Light the CPU fault LED?
                     cpuIERRFound = true;
+                    incrementCPUErrorCount(cpu);
                     // Next check if it's a CPU/VR mismatch by reading the
                     // IA32_MC4_STATUS MSR (0x411)
                     uint64_t mc4Status = 0;
