@@ -32,6 +32,7 @@ static bool hostOff = true;
 
 const static constexpr int caterrTimeoutMs = 2000;
 const static constexpr int err2TimeoutMs = 90000;
+const static constexpr int smiTimeoutMs = 90000;
 const static constexpr int crashdumpTimeoutS = 300;
 
 // Timers
@@ -39,12 +40,16 @@ const static constexpr int crashdumpTimeoutS = 300;
 static boost::asio::steady_timer caterrAssertTimer(io);
 // Timer for ERR2 asserted
 static boost::asio::steady_timer err2AssertTimer(io);
+// Timer for SMI asserted
+static boost::asio::steady_timer smiAssertTimer(io);
 
 // GPIO Lines and Event Descriptors
 static gpiod::line caterrLine;
 static boost::asio::posix::stream_descriptor caterrEvent(io);
 static gpiod::line err2Line;
 static boost::asio::posix::stream_descriptor err2Event(io);
+static gpiod::line smiLine;
+static boost::asio::posix::stream_descriptor smiEvent(io);
 //----------------------------------
 // PCH_BMC_THERMTRIP function related definition
 //----------------------------------
@@ -91,6 +96,13 @@ static void cpuERR2Log(const int cpuNum)
     sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
                     LOG_INFO, "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
                     "REDFISH_MESSAGE_ARGS=%s", msg.c_str(), NULL);
+}
+
+static void smiTimeoutLog()
+{
+    sd_journal_send("MESSAGE=HostError: SMI Timeout", "PRIORITY=%i", LOG_INFO,
+                    "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
+                    "REDFISH_MESSAGE_ARGS=%s", "SMI Timeout", NULL);
 }
 
 static void initializeErrorState();
@@ -152,6 +164,7 @@ static std::shared_ptr<sdbusplus::bus::match::match> startHostStateMonitor()
             {
                 caterrAssertTimer.cancel();
                 err2AssertTimer.cancel();
+                smiAssertTimer.cancel();
             }
         });
 }
@@ -754,6 +767,75 @@ static void err2Handler()
                          });
 }
 
+static void smiAssertHandler()
+{
+    smiAssertTimer.expires_after(std::chrono::milliseconds(smiTimeoutMs));
+    smiAssertTimer.async_wait([](const boost::system::error_code ec) {
+        if (ec)
+        {
+            // operation_aborted is expected if timer is canceled before
+            // completion.
+            if (ec != boost::asio::error::operation_aborted)
+            {
+                std::cerr << "smi timeout async_wait failed: " << ec.message()
+                          << "\n";
+            }
+            return;
+        }
+        std::cerr << "SMI asserted for " << std::to_string(smiTimeoutMs)
+                  << " ms\n";
+        smiTimeoutLog();
+        conn->async_method_call(
+            [](boost::system::error_code ec,
+               const std::variant<bool>& property) {
+                if (ec)
+                {
+                    return;
+                }
+                const bool* reset = std::get_if<bool>(&property);
+                if (reset == nullptr)
+                {
+                    std::cerr << "Unable to read reset on SMI value\n";
+                    return;
+                }
+                startCrashdumpAndRecovery(*reset);
+            },
+            "xyz.openbmc_project.Settings",
+            "/xyz/openbmc_project/control/bmc_reset_disables",
+            "org.freedesktop.DBus.Properties", "Get",
+            "xyz.openbmc_project.Control.ResetDisables", "ResetOnSMI");
+    });
+}
+
+static void smiHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = smiLine.event_read();
+
+        bool smi = gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (smi)
+        {
+            smiAssertHandler();
+        }
+        else
+        {
+            smiAssertTimer.cancel();
+        }
+    }
+    smiEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
+                        [](const boost::system::error_code ec) {
+                            if (ec)
+                            {
+                                std::cerr
+                                    << "smi handler error: " << ec.message()
+                                    << "\n";
+                                return;
+                            }
+                            smiHandler();
+                        });
+}
+
 static void initializeErrorState()
 {
     // Handle CPU_CATERR if it's asserted now
@@ -766,6 +848,12 @@ static void initializeErrorState()
     if (err2Line.get_value() == 0)
     {
         err2AssertHandler();
+    }
+
+    // Handle SMI if it's asserted now
+    if (smiLine.get_value() == 0)
+    {
+        smiAssertHandler();
     }
 }
 } // namespace host_error_monitor
@@ -801,6 +889,14 @@ int main(int argc, char* argv[])
     if (!host_error_monitor::requestGPIOEvents(
             "CPU_ERR2", host_error_monitor::err2Handler,
             host_error_monitor::err2Line, host_error_monitor::err2Event))
+    {
+        return -1;
+    }
+
+    // Request SMI GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "SMI", host_error_monitor::smiHandler, host_error_monitor::smiLine,
+            host_error_monitor::smiEvent))
     {
         return -1;
     }
