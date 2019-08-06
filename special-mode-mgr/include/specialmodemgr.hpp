@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <boost/asio/deadline_timer.hpp>
 #include <sdbusplus/asio/object_server.hpp>
+#include <chrono>
 
 static constexpr const char* strSpecialMode = "SpecialMode";
 
@@ -35,11 +35,12 @@ class SpecialModeMgr
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
     uint8_t specialMode = none;
-    std::unique_ptr<boost::asio::deadline_timer> timer = nullptr;
+    std::unique_ptr<boost::asio::steady_timer> timer = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> intfAddMatchRule = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> propUpdMatchRule = nullptr;
     void addSpecialModeProperty();
     void checkAndAddSpecialModeProperty(const std::string& provMode);
+    void updateTimer(int countInSeconds);
 
   public:
     void setSpecialModeValue(uint8_t value) const
