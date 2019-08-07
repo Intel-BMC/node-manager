@@ -74,6 +74,64 @@ ColdRedundancy::ColdRedundancy(
                 createPSU(io, objectServer, systemBus);
             });
         };
+
+    std::function<void(sdbusplus::message::message&)> eventCollect =
+        [&](sdbusplus::message::message& message) {
+            std::string objectName;
+            boost::container::flat_map<std::string, std::variant<bool>> values;
+            std::string path = message.get_path();
+            std::size_t slantingPos = path.find_last_of("/\\");
+            if ((slantingPos == std::string::npos) ||
+                ((slantingPos + 1) >= path.size()))
+            {
+                std::cerr << "Unable to get PSU state name from path\n";
+                return;
+            }
+            std::string statePSUName = path.substr(slantingPos + 1);
+            bool stateChanged = false;
+
+            std::size_t hypenPos = statePSUName.find("_");
+            if (hypenPos == std::string::npos)
+            {
+                std::cerr << "Unable to get PSU name from PSU path\n";
+                return;
+            }
+            std::string psuName = statePSUName.substr(0, hypenPos);
+
+            try
+            {
+                message.read(objectName, values);
+            }
+            catch (const sdbusplus::exception::exception& e)
+            {
+                std::cerr << "Failed to read message from PSU Event\n";
+                return;
+            }
+
+            for (auto& psu : powerSupplies)
+            {
+
+                if (psu->name != psuName)
+                {
+                    continue;
+                }
+
+                std::string psuEventName = "OperationalStatus";
+                auto findEvent = values.find(psuEventName);
+                if (findEvent != values.end())
+                {
+                    if (std::get<bool>(findEvent->second))
+                    {
+                        psu->state = PSUState::acLost;
+                    }
+                    else
+                    {
+                        psu->state = PSUState::normal;
+                    }
+                }
+            }
+        };
+
     for (const char* type : psuInterfaceTypes)
     {
         auto match = std::make_unique<sdbusplus::bus::match::match>(
@@ -82,6 +140,16 @@ ColdRedundancy::ColdRedundancy(
                 std::string(inventoryPath) + "',arg0namespace='" + type + "'",
             eventHandler);
         matches.emplace_back(std::move(match));
+    }
+
+    for (const char* eventType : psuEventInterface)
+    {
+        auto eventMatch = std::make_unique<sdbusplus::bus::match::match>(
+            static_cast<sdbusplus::bus::bus&>(*systemBus),
+            "type='signal',member='PropertiesChanged',path_namespace='" +
+                std::string(eventPath) + "',arg0namespace='" + eventType + "'",
+            eventCollect);
+        matches.emplace_back(std::move(eventMatch));
     }
 
     io.run();
