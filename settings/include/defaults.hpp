@@ -204,7 +204,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("BMCSource",
                          "com.intel.Control.NMISource.BMCSourceSignal.None");
 
-    setting->addProperty("Enabled", true);
+    setting->addProperty("Enabled", false);
 
     setting = &settings.emplace_back(objectServer,
                                      "/xyz/openbmc_project/state/chassis0",
