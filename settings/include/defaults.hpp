@@ -299,6 +299,12 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("DimmOffset", std::vector<uint8_t>{});
 
+    setting = &settings.emplace_back(
+        objectServer, "/xyz/openbmc_project/logging/rest_api_logs",
+        "xyz.openbmc_project.Object.Enable");
+
+    setting->addProperty("Enabled", true);
+
     for (SettingsInterface &s : settings)
     {
         s.initialize();
