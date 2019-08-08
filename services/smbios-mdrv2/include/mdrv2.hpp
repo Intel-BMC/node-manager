@@ -38,7 +38,8 @@ namespace smbios
 static constexpr const char *mdrV2Path = "/xyz/openbmc_project/Smbios/MDR_V2";
 constexpr const int limitEntryLen = 0xff;
 
-class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
+class MDR_V2 : sdbusplus::server::object::object<
+                   sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2>
 {
   public:
     MDR_V2() = delete;
@@ -49,7 +50,8 @@ class MDR_V2 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2
     ~MDR_V2() = default;
 
     MDR_V2(sdbusplus::bus::bus &bus, const char *path, sd_event *event) :
-        sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2(bus, path),
+        sdbusplus::server::object::object<
+            sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V2>(bus, path),
         bus(bus), timer(event, [&](void) { agentSynchronizeData(); })
     {
 

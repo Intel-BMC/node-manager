@@ -26,6 +26,7 @@ int main(void)
     sd_event *events = nullptr;
     sd_event_default(&events);
     sdbusplus::bus::bus bus = sdbusplus::bus::new_default();
+    sdbusplus::server::manager::manager objManager(bus, "/xyz/openbmc_project");
     bus.attach_event(events, SD_EVENT_PRIORITY_NORMAL);
     bus.request_name("xyz.openbmc_project.Smbios.MDR_V2");
 
