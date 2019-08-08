@@ -75,6 +75,87 @@ ColdRedundancy::ColdRedundancy(
             });
         };
 
+    std::function<void(sdbusplus::message::message&)> paramConfig =
+        [this](sdbusplus::message::message& message) {
+            std::string objectName;
+            boost::container::flat_map<
+                std::string, std::variant<bool, uint8_t, uint32_t, std::string,
+                                          std::vector<uint8_t>>>
+                values;
+            message.read(objectName, values);
+
+            for (auto& value : values)
+            {
+                if (value.first == "ColdRedundancyEnabled")
+                {
+                    bool* pCREnabled = std::get_if<bool>(&(value.second));
+                    if (pCREnabled != nullptr)
+                    {
+                        crEnabled = *pCREnabled;
+                        ColdRedundancy::configCR(false);
+                    }
+                    continue;
+                }
+                if (value.first == "RotationEnabled")
+                {
+                    bool* pRotationEnabled = std::get_if<bool>(&(value.second));
+                    if (pRotationEnabled != nullptr)
+                    {
+                        rotationEnabled = *pRotationEnabled;
+                        ColdRedundancy::configCR(false);
+                    }
+                    continue;
+                }
+                if (value.first == "RotationAlgorithm")
+                {
+                    std::string* pAlgo =
+                        std::get_if<std::string>(&(value.second));
+                    if (pAlgo != nullptr)
+                    {
+                        rotationAlgo = *pAlgo;
+                    }
+                    continue;
+                }
+                if (value.first == "RotationRankOrder")
+                {
+                    auto pRank =
+                        std::get_if<std::vector<uint8_t>>(&(value.second));
+                    if (pRank == nullptr)
+                    {
+                        continue;
+                    }
+                    uint8_t rankSize = pRank->size();
+                    uint8_t index = 0;
+                    for (auto& psu : powerSupplies)
+                    {
+                        if (index < rankSize)
+                        {
+                            psu->order = (*pRank)[index];
+                        }
+                        else
+                        {
+                            psu->order = 0;
+                        }
+                        index++;
+                    }
+                    ColdRedundancy::configCR(false);
+                    continue;
+                }
+                if (value.first == "PeriodOfRotation")
+                {
+                    uint32_t* pPeriod = std::get_if<uint32_t>(&(value.second));
+                    if (pPeriod != nullptr)
+                    {
+                        rotationPeriod = *pPeriod;
+                        timerRotation.cancel();
+                        startRotateCR();
+                    }
+                    continue;
+                }
+                std::cerr << "Unused property changed\n";
+            }
+        };
+
     std::function<void(sdbusplus::message::message&)> eventCollect =
         [&](sdbusplus::message::message& message) {
             std::string objectName;
@@ -152,6 +233,14 @@ ColdRedundancy::ColdRedundancy(
         matches.emplace_back(std::move(eventMatch));
     }
 
+    auto configParamMatch = std::make_unique<sdbusplus::bus::match::match>(
+        static_cast<sdbusplus::bus::bus&>(*systemBus),
+        "type='signal',member='PropertiesChanged',path_namespace='" +
+            std::string(coldRedundancyPath) + "',arg0namespace='" +
+            redundancyInterface + "'",
+        paramConfig);
+    matches.emplace_back(std::move(configParamMatch));
+
     io.run();
 }
 
@@ -164,12 +253,11 @@ void ColdRedundancy::createPSU(
     std::vector<PropertyMapType> sensorConfigs;
     numberOfPSU = 0;
     powerSupplies.clear();
-    sensorConfigs.clear();
 
     // call mapper to get matched obj paths
     conn->async_method_call(
-        [this, &conn, &sensorConfigs](const boost::system::error_code ec,
-                                      GetSubTreeType subtree) {
+        [this, &conn](const boost::system::error_code ec,
+                      GetSubTreeType subtree) {
             if (ec)
             {
                 std::cerr << "Exception happened when communicating to "
@@ -202,9 +290,8 @@ void ColdRedundancy::createPSU(
                             continue;
 
                         conn->async_method_call(
-                            [this, &conn,
-                             &sensorConfigs](const boost::system::error_code ec,
-                                             PropertyMapType propMap) {
+                            [this, &conn](const boost::system::error_code ec,
+                                          PropertyMapType propMap) {
                                 if (ec)
                                 {
                                     std::cerr
@@ -216,7 +303,6 @@ void ColdRedundancy::createPSU(
                                 {
                                     std::cerr << "get valid propMap\n";
                                 }
-                                // sensorConfigs.emplace_back(propMap);
                                 auto configBus =
                                     std::get_if<uint64_t>(&propMap["Bus"]);
                                 auto configAddress =
@@ -257,6 +343,11 @@ void ColdRedundancy::createPSU(
     startCRCheck();
 }
 
+uint8_t ColdRedundancy::pSUNumber() const
+{
+    return numberOfPSU;
+}
+
 PowerSupply::PowerSupply(
     std::string name, uint8_t bus, uint8_t address,
     const std::shared_ptr<sdbusplus::asio::connection>& dbusConnection) :
@@ -277,7 +368,8 @@ PowerSupply::PowerSupply(
 void ColdRedundancy::reRanking(void)
 {
     uint8_t index = 1;
-    if (rotationAlgo == bmcSpecific)
+    if (rotationAlgo ==
+        "xyz.openbmc_project.Control.PowerSupplyRedundancy.Algo.bmcSpecific")
     {
         for (auto& psu : powerSupplies)
         {
@@ -297,7 +389,8 @@ void ColdRedundancy::reRanking(void)
         {
             if (psu->state == PSUState::acLost)
             {
-                rotationAlgo = bmcSpecific;
+                rotationAlgo = "xyz.openbmc_project.Control."
+                               "PowerSupplyRedundancy.Algo.bmcSpecific";
                 reRanking();
                 return;
             }

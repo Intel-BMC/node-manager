@@ -33,6 +33,7 @@ class ColdRedundancy
         std::shared_ptr<sdbusplus::asio::connection>& dbusConnection);
     ~ColdRedundancy() = default;
 
+    uint8_t pSUNumber() const override;
     void
         createPSU(boost::asio::io_service& io,
                   sdbusplus::asio::object_server& objectServer,
@@ -42,7 +43,8 @@ class ColdRedundancy
     bool crSupported = true;
     bool crEnabled = true;
     bool rotationEnabled = true;
-    uint8_t rotationAlgo = 0;
+    std::string rotationAlgo =
+        "xyz.openbmc_project.Control.PowerSupplyRedundancy.Algo.bmcSpecific";
     uint8_t psOrder;
     uint8_t numberOfPSU = 0;
     uint32_t rotationPeriod = 7 * secondsInOneDay;
