@@ -21,27 +21,46 @@
 #include <phosphor-logging/log.hpp>
 #include <boost/asio.hpp>
 
+#include "pfr.hpp"
+
 namespace intel
 {
 namespace pfr
 {
+
+static constexpr const char *versionPurposeBMC =
+    "xyz.openbmc_project.Software.Version.VersionPurpose.BMC";
+static constexpr const char *versionPurposeHost =
+    "xyz.openbmc_project.Software.Version.VersionPurpose.Host";
+static constexpr const char *versionPurposeOther =
+    "xyz.openbmc_project.Software.Version.VersionPurpose.Other";
+
+static constexpr const char *versionStr = "Version";
+static constexpr const char *ufmProvisionedStr = "ufm_provisioned";
+static constexpr const char *ufmLockedStr = "ufm_locked";
 
 class PfrVersion
 {
   public:
     PfrVersion(sdbusplus::asio::object_server &srv_,
                std::shared_ptr<sdbusplus::asio::connection> &conn_,
-               const std::string &path_);
+               const std::string &path_, const ImageType &imgType_,
+               const std::string &purpose_);
     ~PfrVersion() = default;
 
     std::shared_ptr<sdbusplus::asio::connection> conn;
 
+    void updateVersion();
+
   private:
     sdbusplus::asio::object_server &server;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> versionIface;
+    bool internalSet = false;
 
     std::string path;
     std::string version;
     std::string purpose;
+    ImageType imgType;
 };
 
 class PfrConfig
@@ -53,12 +72,15 @@ class PfrConfig
 
     std::shared_ptr<sdbusplus::asio::connection> conn;
 
+    void updateProvisioningStatus();
+
   private:
     sdbusplus::asio::object_server &server;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> pfrCfgIface;
+    bool internalSet = false;
 
-    bool getPFRProvisionedState();
-    std::string getBIOSVersion(uint8_t type);
-    std::string getBMCVersion(uint8_t type);
+    bool ufmProvisioned;
+    bool ufmLocked;
 };
 
 } // namespace pfr

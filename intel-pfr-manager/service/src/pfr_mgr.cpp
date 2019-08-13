@@ -15,7 +15,6 @@
 */
 
 #include "pfr_mgr.hpp"
-#include "pfr.hpp"
 
 namespace intel
 {
@@ -27,54 +26,34 @@ static constexpr uint8_t recoveryImage = 1;
 
 PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
                        std::shared_ptr<sdbusplus::asio::connection> &conn_,
-                       const std::string &path_) :
+                       const std::string &path_, const ImageType &imgType_,
+                       const std::string &purpose_) :
     server(srv_),
-    conn(conn_), path(path_)
+    conn(conn_), path(path_), imgType(imgType_), purpose(purpose_)
 {
-    if (path == "bmc_active")
-    {
-        purpose = "xyz.openbmc_project.Software.Version.VersionPurpose.BMC";
-        ImageType imgType = ImageType::bmcActive;
-        version = getVersionInfoCPLD(imgType);
-    }
-    else if (path == "bmc_recovery")
-    {
-        purpose = "xyz.openbmc_project.Software.Version.VersionPurpose.BMC";
-        ImageType imgType = ImageType::bmcRecovery;
-        version = getVersionInfoCPLD(imgType);
-    }
-    else if (path == "bios_active")
-    {
-        purpose = "xyz.openbmc_project.Software.Version.VersionPurpose.Host";
-        ImageType imgType = ImageType::biosActive;
-        version = getVersionInfoCPLD(imgType);
-    }
-    else if (path == "bios_recovery")
-    {
-        purpose = "xyz.openbmc_project.Software.Version.VersionPurpose.Host";
-        ImageType imgType = ImageType::biosRecovery;
-        version = getVersionInfoCPLD(imgType);
-    }
-    else if (path == "cpld")
-    {
-        purpose = "xyz.openbmc_project.Software.Version.VersionPurpose.Other";
-        ImageType imgType = ImageType::cpld;
-        version = getVersionInfoCPLD(imgType);
-    }
-    else
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid path specified for PfrVersion");
-        return;
-    }
+    version = getVersionInfoCPLD(imgType);
 
     std::string objPath = "/xyz/openbmc_project/software/" + path;
-    auto iface =
+    versionIface =
         server.add_interface(objPath, "xyz.openbmc_project.Software.Version");
-    iface->register_property("Purpose", purpose);
-    iface->register_property("Version", version);
+    versionIface->register_property("Purpose", purpose);
+    versionIface->register_property(
+        versionStr, version,
+        // Override set
+        [this](const std::string &req, std::string &propertyValue) {
+            if (internalSet)
+            {
+                if (req != propertyValue)
+                {
+                    version = req;
+                    propertyValue = req;
+                    return 1;
+                }
+            }
+            return 0;
+        });
 
-    iface->initialize();
+    versionIface->initialize();
 
     /* Activation interface represents activation state for an associated
      * xyz.openbmc_project.Software.Version. since these versions are already
@@ -92,13 +71,16 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
     activationIface->initialize();
 }
 
-bool PfrConfig::getPFRProvisionedState()
+void PfrVersion::updateVersion()
 {
-    bool ufmProvisioned = false;
-    bool ufmLocked = false;
-    getProvisioningStatus(ufmLocked, ufmProvisioned);
-
-    return ufmProvisioned;
+    if (versionIface && versionIface->is_initialized())
+    {
+        std::string ver = getVersionInfoCPLD(imgType);
+        internalSet = true;
+        versionIface->set_property(versionStr, ver);
+        internalSet = false;
+    }
+    return;
 }
 
 PfrConfig::PfrConfig(sdbusplus::asio::object_server &srv_,
@@ -106,13 +88,58 @@ PfrConfig::PfrConfig(sdbusplus::asio::object_server &srv_,
     server(srv_),
     conn(conn_)
 {
-    auto pfrIntf =
+    pfrCfgIface =
         server.add_interface("/xyz/openbmc_project/intel_pfr",
                              "xyz.openbmc_project.Intel_PFR.Attributes");
 
-    pfrIntf->register_property("provisioned_state", getPFRProvisionedState());
+    getProvisioningStatus(ufmLocked, ufmProvisioned);
 
-    pfrIntf->initialize();
+    pfrCfgIface->register_property(ufmProvisionedStr, ufmProvisioned,
+                                   // Override set
+                                   [this](const bool req, bool propertyValue) {
+                                       if (internalSet)
+                                       {
+                                           if (req != propertyValue)
+                                           {
+                                               ufmProvisioned = req;
+                                               propertyValue = req;
+                                               return 1;
+                                           }
+                                       }
+                                       return 0;
+                                   });
+
+    pfrCfgIface->register_property(ufmLockedStr, ufmLocked,
+                                   // Override set
+                                   [this](const bool req, bool propertyValue) {
+                                       if (internalSet)
+                                       {
+                                           if (req != propertyValue)
+                                           {
+                                               ufmLocked = req;
+                                               propertyValue = req;
+                                               return 1;
+                                           }
+                                       }
+                                       return 0;
+                                   });
+
+    pfrCfgIface->initialize();
+}
+
+void PfrConfig::updateProvisioningStatus()
+{
+    if (pfrCfgIface && pfrCfgIface->is_initialized())
+    {
+        bool lockVal = false;
+        bool provVal = false;
+        getProvisioningStatus(lockVal, provVal);
+        internalSet = true;
+        pfrCfgIface->set_property(ufmProvisionedStr, provVal);
+        pfrCfgIface->set_property(ufmLockedStr, lockVal);
+        internalSet = false;
+    }
+    return;
 }
 
 } // namespace pfr
