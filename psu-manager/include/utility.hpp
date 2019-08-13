@@ -22,6 +22,8 @@
 #include <sdbusplus/asio/connection.hpp>
 
 const constexpr char* entityManagerName = "xyz.openbmc_project.EntityManager";
+static const constexpr char* redundancyInterface =
+    "xyz.openbmc_project.Control.PowerSupplyRedundancy";
 static const constexpr std::array<const char*, 1> psuEventInterface = {
     "xyz.openbmc_project.State.Decorator.OperationalStatus"};
 
