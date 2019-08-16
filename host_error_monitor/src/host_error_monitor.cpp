@@ -32,7 +32,7 @@ static std::shared_ptr<sdbusplus::asio::connection> conn;
 static bool hostOff = true;
 
 const static constexpr int caterrTimeoutMs = 2000;
-const static constexpr int err2TimeoutMs = 90000;
+const static constexpr int errTimeoutMs = 90000;
 const static constexpr int smiTimeoutMs = 90000;
 const static constexpr int crashdumpTimeoutS = 300;
 
@@ -83,16 +83,19 @@ static void cpuIERRLog(const int cpuNum, const std::string& type)
                     "REDFISH_MESSAGE_ARGS=%s", msg.c_str(), NULL);
 }
 
-static void cpuERR2Log()
+static void cpuERRXLog(const int errPin)
 {
-    sd_journal_send("MESSAGE=HostError: ERR2 Timeout", "PRIORITY=%i", LOG_INFO,
-                    "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
-                    "REDFISH_MESSAGE_ARGS=%s", "ERR2 Timeout", NULL);
+    std::string msg = "ERR" + std::to_string(errPin) + " Timeout";
+
+    sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
+                    LOG_INFO, "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
+                    "REDFISH_MESSAGE_ARGS=%s", msg.c_str(), NULL);
 }
 
-static void cpuERR2Log(const int cpuNum)
+static void cpuERRXLog(const int errPin, const int cpuNum)
 {
-    std::string msg = "ERR2 Timeout on CPU " + std::to_string(cpuNum + 1);
+    std::string msg = "ERR" + std::to_string(errPin) + " Timeout on CPU " +
+                      std::to_string(cpuNum + 1);
 
     sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
                     LOG_INFO, "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
@@ -663,9 +666,10 @@ static void pchThermtripHandler()
         });
 }
 
-static std::bitset<crashdump::maxCPUs> checkERR2CPUs()
+static std::bitset<crashdump::maxCPUs> checkERRPinCPUs(const int errPin)
 {
-    std::bitset<crashdump::maxCPUs> err2CPUs = 0;
+    int errPinSts = (1 << errPin);
+    std::bitset<crashdump::maxCPUs> errPinCPUs = 0;
     for (int cpu = 0, addr = crashdump::minClientAddr;
          addr <= crashdump::maxClientAddr; cpu++, addr++)
     {
@@ -699,19 +703,18 @@ static std::bitset<crashdump::maxCPUs> checkERR2CPUs()
                 continue;
             }
 
-            static constexpr int err2Sts = (1 << 2);
             switch (model)
             {
                 case crashdump::CPUModel::skx_h0:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
-                    // the ERR2 (B(0) D8 F0 offset 210h)
+                    // the ERRx (B(0) D8 F0 offset 210h)
                     uint32_t errpinsts = 0;
                     if (peci_RdPCIConfigLocal(
                             addr, 0, 8, 0, 0x210, sizeof(uint32_t),
                             (uint8_t*)&errpinsts, &cc) == PECI_CC_SUCCESS)
                     {
-                        err2CPUs[cpu] = (errpinsts & err2Sts) != 0;
+                        errPinCPUs[cpu] = (errpinsts & errPinSts) != 0;
                     }
                     break;
                 }
@@ -719,30 +722,32 @@ static std::bitset<crashdump::maxCPUs> checkERR2CPUs()
                 case crashdump::CPUModel::icx_b0:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
-                    // the ERR2 (B(30) D0 F3 offset 274h) (Note: Bus 30 is
+                    // the ERRx (B(30) D0 F3 offset 274h) (Note: Bus 30 is
                     // accessed on PECI as bus 13)
                     uint32_t errpinsts = 0;
                     if (peci_RdEndPointConfigPciLocal(
                             addr, 0, 13, 0, 3, 0x274, sizeof(uint32_t),
                             (uint8_t*)&errpinsts, &cc) == PECI_CC_SUCCESS)
                     {
-                        err2CPUs[cpu] = (errpinsts & err2Sts) != 0;
+                        errPinCPUs[cpu] = (errpinsts & errPinSts) != 0;
                     }
                     break;
                 }
             }
         }
     }
-    return err2CPUs;
+    return errPinCPUs;
 }
 
-static void err2AssertHandler()
+static void errXAssertHandler(const int errPin,
+                              boost::asio::steady_timer& errXAssertTimer)
 {
-    // ERR2 status is not guaranteed through the timeout, so save which
-    // CPUs have asserted ERR2 now
-    std::bitset<crashdump::maxCPUs> err2CPUs = checkERR2CPUs();
-    err2AssertTimer.expires_after(std::chrono::milliseconds(err2TimeoutMs));
-    err2AssertTimer.async_wait([err2CPUs](const boost::system::error_code ec) {
+    // ERRx status is not guaranteed through the timeout, so save which
+    // CPUs have it asserted
+    std::bitset<crashdump::maxCPUs> errPinCPUs = checkERRPinCPUs(errPin);
+    errXAssertTimer.expires_after(std::chrono::milliseconds(errTimeoutMs));
+    errXAssertTimer.async_wait([errPin, errPinCPUs](
+                                   const boost::system::error_code ec) {
         if (ec)
         {
             // operation_aborted is expected if timer is canceled before
@@ -754,21 +759,42 @@ static void err2AssertHandler()
             }
             return;
         }
-        std::cerr << "ERR2 asserted for " << std::to_string(err2TimeoutMs)
-                  << " ms\n";
-        if (err2CPUs.count())
+        std::cerr << "ERR" << std::to_string(errPin) << " asserted for "
+                  << std::to_string(errTimeoutMs) << " ms\n";
+        if (errPinCPUs.count())
         {
-            for (int i = 0; i < err2CPUs.size(); i++)
+            for (int i = 0; i < errPinCPUs.size(); i++)
             {
-                if (err2CPUs[i])
+                if (errPinCPUs[i])
                 {
-                    cpuERR2Log(i);
+                    cpuERRXLog(errPin, i);
                 }
             }
         }
         else
         {
-            cpuERR2Log();
+            cpuERRXLog(errPin);
+        }
+    });
+}
+
+static void err2AssertHandler()
+{
+    // Handle the standard ERR2 detection and logging
+    const static constexpr int err2 = 2;
+    errXAssertHandler(err2, err2AssertTimer);
+    // Also handle reset for ERR2
+    err2AssertTimer.async_wait([](const boost::system::error_code ec) {
+        if (ec)
+        {
+            // operation_aborted is expected if timer is canceled before
+            // completion.
+            if (ec != boost::asio::error::operation_aborted)
+            {
+                std::cerr << "err2 timeout async_wait failed: " << ec.message()
+                          << "\n";
+            }
+            return;
         }
         conn->async_method_call(
             [](boost::system::error_code ec,
