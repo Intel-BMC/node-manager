@@ -28,8 +28,9 @@ static const constexpr std::array<const char*, 1> psuEventInterface = {
     "xyz.openbmc_project.State.Decorator.OperationalStatus"};
 
 using BasicVariantType =
-    std::variant<std::vector<std::string>, std::string, int64_t, uint64_t,
-                 double, int32_t, uint32_t, int16_t, uint16_t, uint8_t, bool>;
+    std::variant<std::vector<std::string>, std::vector<uint64_t>, std::string,
+                 int64_t, uint64_t, double, int32_t, uint32_t, int16_t,
+                 uint16_t, uint8_t, bool>;
 
 using PropertyMapType =
     boost::container::flat_map<std::string, BasicVariantType>;
@@ -56,4 +57,4 @@ void getPSUEvent(
     const std::string& psuName, PSUState& state);
 
 int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value);
-int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t& value);
+int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, int& value);

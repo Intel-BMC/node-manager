@@ -31,22 +31,28 @@
 
 static constexpr const bool debug = false;
 
-static constexpr const std::array<const char*, 1> psuInterfaceTypes = {
-    "xyz.openbmc_project.Configuration.pmbus"};
-static const constexpr char* inventoryPath = "/xyz/openbmc_project/inventory";
+static constexpr const std::array<const char*, 2> psuInterfaceTypes = {
+    "xyz.openbmc_project.Configuration.pmbus",
+    "xyz.openbmc_project.Configuration.PSUPresence"};
+static const constexpr char* inventoryPath =
+    "/xyz/openbmc_project/inventory/system";
 static const constexpr char* eventPath = "/xyz/openbmc_project/State/Decorator";
 static const constexpr char* coldRedundancyPath =
     "/xyz/openbmc_project/control/power_supply_redundancy";
 
 static std::vector<std::unique_ptr<PowerSupply>> powerSupplies;
+static uint8_t pmbusNum = 7;
+static std::vector<uint64_t> addrTable = {0x50, 0x51};
 
 ColdRedundancy::ColdRedundancy(
     boost::asio::io_service& io, sdbusplus::asio::object_server& objectServer,
-    std::shared_ptr<sdbusplus::asio::connection>& systemBus) :
+    std::shared_ptr<sdbusplus::asio::connection>& systemBus,
+    std::vector<std::unique_ptr<sdbusplus::bus::match::match>>& matches) :
     sdbusplus::xyz::openbmc_project::Control::server::PowerSupplyRedundancy(
         *systemBus, coldRedundancyPath),
     timerRotation(io), timerCheck(io), systemBus(systemBus),
-    warmRedundantTimer1(io), warmRedundantTimer2(io)
+    warmRedundantTimer1(io), warmRedundantTimer2(io), keepAliveTimer(io),
+    filterTimer(io)
 {
     io.post([this, &io, &objectServer, &systemBus]() {
         createPSU(io, objectServer, systemBus);
@@ -59,7 +65,6 @@ ColdRedundancy::ColdRedundancy(
                 std::cerr << "callback method error\n";
                 return;
             }
-            boost::asio::steady_timer filterTimer(io);
             filterTimer.expires_after(std::chrono::seconds(1));
             filterTimer.async_wait([this, &io, &objectServer, &systemBus](
                                        const boost::system::error_code& ec) {
@@ -244,13 +249,83 @@ ColdRedundancy::ColdRedundancy(
     io.run();
 }
 
+static std::set<uint8_t> psuPresence;
+static const constexpr uint8_t fruOffsetZero = 0x00;
+
+int pingPSU(const uint8_t& addr)
+{
+    int fruData = 0;
+    return i2cGet(pmbusNum, addr, fruOffsetZero, fruData);
+}
+
+void rescanPSUEntityManager(
+    std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
+{
+    sdbusplus::message::message method = dbusConnection->new_method_call(
+        "xyz.openbmc_project.FruDevice", "/xyz/openbmc_project/FruDevice",
+        "xyz.openbmc_project.FruDeviceManager", "ReScan");
+
+    try
+    {
+        dbusConnection->call(method);
+    }
+    catch (const sdbusplus::exception::exception&)
+    {
+        std::cerr << "Failed to rescan entity manager\n";
+    }
+    return;
+}
+
+void keepAlive(std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
+{
+    bool newPSUFound = false;
+    uint8_t psuNumber = 1;
+    for (const auto& addr : addrTable)
+    {
+        if (0 == pingPSU(addr))
+        {
+            auto found = psuPresence.find(addr);
+            if (found != psuPresence.end())
+            {
+                continue;
+            }
+            newPSUFound = true;
+            psuPresence.emplace(addr);
+            std::string psuNumStr = "PSU" + std::to_string(psuNumber);
+            sd_journal_send("MESSAGE=%s", "New PSU is found", "PRIORITY=%i",
+                            LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                            "OpenBMC.0.1.PowerSupplyInserted",
+                            "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
+        }
+        else
+        {
+            auto found = psuPresence.find(addr);
+            if (found == psuPresence.end())
+            {
+                continue;
+            }
+            psuPresence.erase(addr);
+            std::string psuNumStr = "PSU" + std::to_string(psuNumber);
+            sd_journal_send("MESSAGE=%s", "One PSU is removed", "PRIORITY=%i",
+                            LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                            "OpenBMC.0.1.PowerSupplyRemoved",
+                            "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
+        }
+        psuNumber++;
+    }
+    if (newPSUFound)
+    {
+        rescanPSUEntityManager(dbusConnection);
+    }
+}
+
+static const constexpr int psuDepth = 3;
 // Check PSU information from entity-manager D-Bus interface and use the bus
 // address to create PSU Class for cold redundancy.
 void ColdRedundancy::createPSU(
     boost::asio::io_service& io, sdbusplus::asio::object_server& objectServer,
     std::shared_ptr<sdbusplus::asio::connection>& conn)
 {
-    std::vector<PropertyMapType> sensorConfigs;
     numberOfPSU = 0;
     powerSupplies.clear();
 
@@ -290,8 +365,9 @@ void ColdRedundancy::createPSU(
                             continue;
 
                         conn->async_method_call(
-                            [this, &conn](const boost::system::error_code ec,
-                                          PropertyMapType propMap) {
+                            [this, &conn,
+                             &interface](const boost::system::error_code ec,
+                                         PropertyMapType propMap) {
                                 if (ec)
                                 {
                                     std::cerr
@@ -303,16 +379,44 @@ void ColdRedundancy::createPSU(
                                 {
                                     std::cerr << "get valid propMap\n";
                                 }
+
+                                auto configName =
+                                    std::get_if<std::string>(&propMap["Name"]);
+                                if (configName == nullptr)
+                                {
+                                    std::cerr << "error finding necessary "
+                                                 "entry in configuration\n";
+                                    return;
+                                }
+                                if (interface == "xyz.openbmc_project."
+                                                 "Configuration.PSUPresence")
+                                {
+                                    auto psuBus =
+                                        std::get_if<uint64_t>(&propMap["Bus"]);
+                                    auto psuAddress =
+                                        std::get_if<std::vector<uint64_t>>(
+                                            &propMap["Address"]);
+
+                                    if (psuBus == nullptr ||
+                                        psuAddress == nullptr)
+                                    {
+                                        std::cerr << "error finding necessary "
+                                                     "entry in configuration\n";
+                                        return;
+                                    }
+                                    pmbusNum = static_cast<uint8_t>(*psuBus);
+                                    addrTable = *psuAddress;
+                                    keepAliveCheck();
+                                    return;
+                                }
+
                                 auto configBus =
                                     std::get_if<uint64_t>(&propMap["Bus"]);
                                 auto configAddress =
                                     std::get_if<uint64_t>(&propMap["Address"]);
-                                auto configName =
-                                    std::get_if<std::string>(&propMap["Name"]);
 
                                 if (configBus == nullptr ||
-                                    configAddress == nullptr ||
-                                    configName == nullptr)
+                                    configAddress == nullptr)
                                 {
                                     std::cerr << "error finding necessary "
                                                  "entry in configuration\n";
@@ -337,10 +441,26 @@ void ColdRedundancy::createPSU(
         "xyz.openbmc_project.ObjectMapper",
         "/xyz/openbmc_project/object_mapper",
         "xyz.openbmc_project.ObjectMapper", "GetSubTree",
-        "/xyz/openbmc_project/inventory/system/powersupply", 2,
-        psuInterfaceTypes);
+        "/xyz/openbmc_project/inventory/system", psuDepth, psuInterfaceTypes);
     startRotateCR();
     startCRCheck();
+}
+
+void ColdRedundancy::keepAliveCheck(void)
+{
+    keepAliveTimer.expires_after(std::chrono::seconds(2));
+    keepAliveTimer.async_wait([&](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+        else if (ec)
+        {
+            std::cerr << "timer error\n";
+        }
+        keepAlive(systemBus);
+        keepAliveCheck();
+    });
 }
 
 uint8_t ColdRedundancy::pSUNumber() const
@@ -453,7 +573,7 @@ void ColdRedundancy::checkCR(void)
     {
         if (psu->state == PSUState::normal)
         {
-            uint8_t order = 0;
+            int order = 0;
             if (i2cGet(psu->bus, psu->address, pmbusCmdCRSupport, order))
             {
                 std::cerr << "Failed to get PSU Cold Redundancy order\n";
