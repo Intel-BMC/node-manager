@@ -44,6 +44,7 @@ static boost::asio::posix::stream_descriptor caterrEvent(io);
 static gpiod::line pchThermtripLine;
 static boost::asio::posix::stream_descriptor pchThermtripEvent(io);
 
+static void initializeErrorState();
 static void initializeHostState()
 {
     conn->async_method_call(
@@ -60,6 +61,11 @@ static void initializeHostState()
                 return;
             }
             hostOff = *state == "xyz.openbmc_project.State.Host.HostState.Off";
+            // If the system is on, initialize the error state
+            if (!hostOff)
+            {
+                initializeErrorState();
+            }
         },
         "xyz.openbmc_project.State.Host", "/xyz/openbmc_project/state/host0",
         "org.freedesktop.DBus.Properties", "Get",
@@ -215,6 +221,46 @@ static void startCrashdumpAndRecovery(bool recoverSystem)
         "com.intel.crashdump.Stored", "GenerateStoredLog");
 }
 
+static void caterrAssertHandler()
+{
+    std::cout << "CPU CATERR detected, starting timer\n";
+    caterrAssertTimer.expires_after(std::chrono::milliseconds(caterrTimeoutMs));
+    caterrAssertTimer.async_wait([](const boost::system::error_code ec) {
+        if (ec)
+        {
+            // operation_aborted is expected if timer is canceled
+            // before completion.
+            if (ec != boost::asio::error::operation_aborted)
+            {
+                std::cerr << "caterr timeout async_wait failed: "
+                          << ec.message() << "\n";
+            }
+            std::cout << "CATERR assert timer canceled\n";
+            return;
+        }
+        std::cout << "CATERR asset timer completed\n";
+        conn->async_method_call(
+            [](boost::system::error_code ec,
+               const std::variant<bool>& property) {
+                if (ec)
+                {
+                    return;
+                }
+                const bool* reset = std::get_if<bool>(&property);
+                if (reset == nullptr)
+                {
+                    std::cerr << "Unable to read reset on CATERR value\n";
+                    return;
+                }
+                startCrashdumpAndRecovery(*reset);
+            },
+            "xyz.openbmc_project.Settings",
+            "/xyz/openbmc_project/control/processor_error_config",
+            "org.freedesktop.DBus.Properties", "Get",
+            "xyz.openbmc_project.Control.Processor.ErrConfig", "ResetOnCATERR");
+    });
+}
+
 static void caterrHandler()
 {
     if (!hostOff)
@@ -225,46 +271,7 @@ static void caterrHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (caterr)
         {
-            std::cout << "CPU CATERR detected, starting timer\n";
-            caterrAssertTimer.expires_after(
-                std::chrono::milliseconds(caterrTimeoutMs));
-            caterrAssertTimer.async_wait(
-                [](const boost::system::error_code ec) {
-                    if (ec)
-                    {
-                        // operation_aborted is expected if timer is canceled
-                        // before completion.
-                        if (ec != boost::asio::error::operation_aborted)
-                        {
-                            std::cerr << "caterr timeout async_wait failed: "
-                                      << ec.message() << "\n";
-                        }
-                        std::cout << "CATERR assert timer canceled\n";
-                        return;
-                    }
-                    std::cout << "CATERR asset timer completed\n";
-                    conn->async_method_call(
-                        [](boost::system::error_code ec,
-                           const std::variant<bool>& property) {
-                            if (ec)
-                            {
-                                return;
-                            }
-                            const bool* reset = std::get_if<bool>(&property);
-                            if (reset == nullptr)
-                            {
-                                std::cerr
-                                    << "Unable to read reset on CATERR value\n";
-                                return;
-                            }
-                            startCrashdumpAndRecovery(*reset);
-                        },
-                        "xyz.openbmc_project.Settings",
-                        "/xyz/openbmc_project/control/processor_error_config",
-                        "org.freedesktop.DBus.Properties", "Get",
-                        "xyz.openbmc_project.Control.Processor.ErrConfig",
-                        "ResetOnCATERR");
-                });
+            caterrAssertHandler();
         }
         else
         {
@@ -312,6 +319,14 @@ static void pchThermtripHandler()
         });
 }
 
+static void initializeErrorState()
+{
+    // Handle CPU_CATERR if it's asserted now
+    if (caterrLine.get_value() == 0)
+    {
+        caterrAssertHandler();
+    }
+}
 } // namespace host_error_monitor
 
 int main(int argc, char* argv[])
