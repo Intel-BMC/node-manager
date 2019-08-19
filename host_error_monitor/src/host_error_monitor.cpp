@@ -41,6 +41,8 @@ const static constexpr int crashdumpTimeoutS = 300;
 static boost::asio::steady_timer caterrAssertTimer(io);
 // Timer for ERR0 asserted
 static boost::asio::steady_timer err0AssertTimer(io);
+// Timer for ERR1 asserted
+static boost::asio::steady_timer err1AssertTimer(io);
 // Timer for ERR2 asserted
 static boost::asio::steady_timer err2AssertTimer(io);
 // Timer for SMI asserted
@@ -51,6 +53,8 @@ static gpiod::line caterrLine;
 static boost::asio::posix::stream_descriptor caterrEvent(io);
 static gpiod::line err0Line;
 static boost::asio::posix::stream_descriptor err0Event(io);
+static gpiod::line err1Line;
+static boost::asio::posix::stream_descriptor err1Event(io);
 static gpiod::line err2Line;
 static boost::asio::posix::stream_descriptor err2Event(io);
 static gpiod::line smiLine;
@@ -179,6 +183,7 @@ static std::shared_ptr<sdbusplus::bus::match::match> startHostStateMonitor()
             {
                 caterrAssertTimer.cancel();
                 err0AssertTimer.cancel();
+                err1AssertTimer.cancel();
                 err2AssertTimer.cancel();
                 smiAssertTimer.cancel();
             }
@@ -819,6 +824,42 @@ static void err0Handler()
                          });
 }
 
+static void err1AssertHandler()
+{
+    // Handle the standard ERR1 detection and logging
+    const static constexpr int err1 = 1;
+    errXAssertHandler(err1, err1AssertTimer);
+}
+
+static void err1Handler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = err1Line.event_read();
+
+        bool err1 = gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (err1)
+        {
+            err1AssertHandler();
+        }
+        else
+        {
+            err1AssertTimer.cancel();
+        }
+    }
+    err1Event.async_wait(boost::asio::posix::stream_descriptor::wait_read,
+                         [](const boost::system::error_code ec) {
+                             if (ec)
+                             {
+                                 std::cerr
+                                     << "err1 handler error: " << ec.message()
+                                     << "\n";
+                                 return;
+                             }
+                             err1Handler();
+                         });
+}
+
 static void err2AssertHandler()
 {
     // Handle the standard ERR2 detection and logging
@@ -971,6 +1012,12 @@ static void initializeErrorState()
         err0AssertHandler();
     }
 
+    // Handle CPU_ERR1 if it's asserted now
+    if (err1Line.get_value() == 0)
+    {
+        err1AssertHandler();
+    }
+
     // Handle CPU_ERR2 if it's asserted now
     if (err2Line.get_value() == 0)
     {
@@ -1022,6 +1069,14 @@ int main(int argc, char* argv[])
     if (!host_error_monitor::requestGPIOEvents(
             "CPU_ERR0", host_error_monitor::err0Handler,
             host_error_monitor::err0Line, host_error_monitor::err0Event))
+    {
+        return -1;
+    }
+
+    // Request CPU_ERR1 GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU_ERR1", host_error_monitor::err1Handler,
+            host_error_monitor::err1Line, host_error_monitor::err1Event))
     {
         return -1;
     }
