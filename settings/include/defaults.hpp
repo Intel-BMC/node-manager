@@ -190,6 +190,12 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("CrashdumpCount", static_cast<uint8_t>(0));
 
     setting = &settings.emplace_back(
+        objectServer, "/xyz/openbmc_project/control/bmc_reset_disables",
+        "xyz.openbmc_project.Control.ResetDisables");
+
+    setting->addProperty("ResetOnSMI", false);
+
+    setting = &settings.emplace_back(
         objectServer, "/com/intel/control/ocotshutdown_policy_config",
         "com.intel.Control.OCOTShutdownPolicy");
 
