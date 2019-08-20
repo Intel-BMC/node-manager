@@ -83,7 +83,7 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
     return 0;
 }
 
-int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t& value)
+int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, int& value)
 {
     unsigned long funcs = 0;
     std::string devPath = "/dev/i2c-" + std::to_string(bus);

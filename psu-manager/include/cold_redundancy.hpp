@@ -30,7 +30,8 @@ class ColdRedundancy
     ColdRedundancy(
         boost::asio::io_service& io,
         sdbusplus::asio::object_server& objectServer,
-        std::shared_ptr<sdbusplus::asio::connection>& dbusConnection);
+        std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
+        std::vector<std::unique_ptr<sdbusplus::bus::match::match>>& matches);
     ~ColdRedundancy() = default;
 
     uint8_t pSUNumber() const override;
@@ -55,15 +56,17 @@ class ColdRedundancy
     void configCR(bool reConfig);
     void checkCR(void);
     void reRanking(void);
-    void putWarmRedundant();
+    void putWarmRedundant(void);
+    void keepAliveCheck(void);
 
     std::shared_ptr<sdbusplus::asio::connection>& systemBus;
 
-    std::vector<std::unique_ptr<sdbusplus::bus::match::match>> matches;
     boost::asio::steady_timer timerRotation;
     boost::asio::steady_timer timerCheck;
     boost::asio::steady_timer warmRedundantTimer1;
     boost::asio::steady_timer warmRedundantTimer2;
+    boost::asio::steady_timer keepAliveTimer;
+    boost::asio::steady_timer filterTimer;
 };
 
 constexpr const uint8_t pmbusCmdCRSupport = 0xd0;
