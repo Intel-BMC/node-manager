@@ -63,6 +63,10 @@ static gpiod::line cpu1ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu1ThermtripEvent(io);
 static gpiod::line cpu2ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu2ThermtripEvent(io);
+static gpiod::line cpu1VRHotLine;
+static boost::asio::posix::stream_descriptor cpu1VRHotEvent(io);
+static gpiod::line cpu2VRHotLine;
+static boost::asio::posix::stream_descriptor cpu2VRHotEvent(io);
 //----------------------------------
 // PCH_BMC_THERMTRIP function related definition
 //----------------------------------
@@ -128,6 +132,16 @@ static void cpuThermTripLog(const int cpuNum)
                     LOG_INFO, "REDFISH_MESSAGE_ID=%s",
                     "OpenBMC.0.1.CPUThermalTrip", "REDFISH_MESSAGE_ARGS=%d",
                     cpuNum, NULL);
+}
+
+static void cpuVRHotLog(const std::string& vr)
+{
+    std::string msg = vr + " Voltage Regulator Overheated.";
+
+    sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
+                    LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                    "OpenBMC.0.1.VoltageRegulatorOverheated",
+                    "REDFISH_MESSAGE_ARGS=%s", vr.c_str(), NULL);
 }
 
 static void ssbThermTripLog()
@@ -716,6 +730,56 @@ static void cpu2ThermtripHandler()
         });
 }
 
+static void cpu1VRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu1VRHotLine.event_read();
+
+        bool cpu1VRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu1VRHot)
+        {
+            cpuVRHotLog("CPU 1");
+        }
+    }
+    cpu1VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
+                              [](const boost::system::error_code ec) {
+                                  if (ec)
+                                  {
+                                      std::cerr << "CPU 1 VRHot handler error: "
+                                                << ec.message() << "\n";
+                                      return;
+                                  }
+                                  cpu1VRHotHandler();
+                              });
+}
+
+static void cpu2VRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu2VRHotLine.event_read();
+
+        bool cpu2VRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu2VRHot)
+        {
+            cpuVRHotLog("CPU 2");
+        }
+    }
+    cpu2VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
+                              [](const boost::system::error_code ec) {
+                                  if (ec)
+                                  {
+                                      std::cerr << "CPU 2 VRHot handler error: "
+                                                << ec.message() << "\n";
+                                      return;
+                                  }
+                                  cpu2VRHotHandler();
+                              });
+}
+
 static void pchThermtripHandler()
 {
     if (!hostOff)
@@ -1177,6 +1241,24 @@ int main(int argc, char* argv[])
             "CPU2_THERMTRIP", host_error_monitor::cpu2ThermtripHandler,
             host_error_monitor::cpu2ThermtripLine,
             host_error_monitor::cpu2ThermtripEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU1_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU1_VRHOT", host_error_monitor::cpu1VRHotHandler,
+            host_error_monitor::cpu1VRHotLine,
+            host_error_monitor::cpu1VRHotEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU2_VRHOT", host_error_monitor::cpu2VRHotHandler,
+            host_error_monitor::cpu2VRHotLine,
+            host_error_monitor::cpu2VRHotEvent))
     {
         return -1;
     }
