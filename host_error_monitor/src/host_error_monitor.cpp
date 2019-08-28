@@ -59,10 +59,13 @@ static gpiod::line err2Line;
 static boost::asio::posix::stream_descriptor err2Event(io);
 static gpiod::line smiLine;
 static boost::asio::posix::stream_descriptor smiEvent(io);
+static gpiod::line cpu1ThermtripLine;
+static boost::asio::posix::stream_descriptor cpu1ThermtripEvent(io);
+static gpiod::line cpu2ThermtripLine;
+static boost::asio::posix::stream_descriptor cpu2ThermtripEvent(io);
 //----------------------------------
 // PCH_BMC_THERMTRIP function related definition
 //----------------------------------
-// GPIO Lines and Event Descriptors
 static gpiod::line pchThermtripLine;
 static boost::asio::posix::stream_descriptor pchThermtripEvent(io);
 
@@ -115,6 +118,16 @@ static void smiTimeoutLog()
     sd_journal_send("MESSAGE=HostError: SMI Timeout", "PRIORITY=%i", LOG_INFO,
                     "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
                     "REDFISH_MESSAGE_ARGS=%s", "SMI Timeout", NULL);
+}
+
+static void cpuThermTripLog(const int cpuNum)
+{
+    std::string msg = "CPU " + std::to_string(cpuNum) + " thermal trip";
+
+    sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
+                    LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                    "OpenBMC.0.1.CPUThermalTrip", "REDFISH_MESSAGE_ARGS=%d",
+                    cpuNum, NULL);
 }
 
 static void ssbThermTripLog()
@@ -650,6 +663,59 @@ static void caterrHandler()
                                caterrHandler();
                            });
 }
+
+static void cpu1ThermtripHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu1ThermtripLine.event_read();
+
+        bool cpu1Thermtrip =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu1Thermtrip)
+        {
+            cpuThermTripLog(1);
+        }
+    }
+    cpu1ThermtripEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 1 Thermtrip handler error: " << ec.message()
+                          << "\n";
+                return;
+            }
+            cpu1ThermtripHandler();
+        });
+}
+
+static void cpu2ThermtripHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu2ThermtripLine.event_read();
+
+        bool cpu2Thermtrip =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu2Thermtrip)
+        {
+            cpuThermTripLog(2);
+        }
+    }
+    cpu2ThermtripEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 2 Thermtrip handler error: " << ec.message()
+                          << "\n";
+                return;
+            }
+            cpu2ThermtripHandler();
+        });
+}
+
 static void pchThermtripHandler()
 {
     if (!hostOff)
@@ -1093,6 +1159,24 @@ int main(int argc, char* argv[])
     if (!host_error_monitor::requestGPIOEvents(
             "SMI", host_error_monitor::smiHandler, host_error_monitor::smiLine,
             host_error_monitor::smiEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU1_THERMTRIP GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU1_THERMTRIP", host_error_monitor::cpu1ThermtripHandler,
+            host_error_monitor::cpu1ThermtripLine,
+            host_error_monitor::cpu1ThermtripEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_THERMTRIP GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU2_THERMTRIP", host_error_monitor::cpu2ThermtripHandler,
+            host_error_monitor::cpu2ThermtripLine,
+            host_error_monitor::cpu2ThermtripEvent))
     {
         return -1;
     }
