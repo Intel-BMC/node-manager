@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-#include <peci/libpeci.h>
+#include <peci.h>
 #include <systemd/sd-journal.h>
 
 #include <bitset>
 #include <boost/asio/posix/stream_descriptor.hpp>
-#include <crashdump/peci_cpus.hpp>
 #include <gpiod.hpp>
 #include <iostream>
 #include <sdbusplus/asio/object_server.hpp>
@@ -391,44 +390,20 @@ static void incrementCPUErrorCount(int cpuNum)
 static bool checkIERRCPUs()
 {
     bool cpuIERRFound = false;
-    for (int cpu = 0, addr = crashdump::minClientAddr;
-         addr <= crashdump::maxClientAddr; cpu++, addr++)
+    for (int cpu = 0, addr = MIN_CLIENT_ADDR; addr <= MAX_CLIENT_ADDR;
+         cpu++, addr++)
     {
-        if (peci_Ping(addr) != PECI_CC_SUCCESS)
-        {
-            continue;
-        }
         uint8_t cc = 0;
-        uint32_t cpuID = 0;
-        if (peci_RdPkgConfig(addr, PECI_MBX_INDEX_CPU_ID, PECI_PKG_ID_CPU_ID,
-                             sizeof(uint32_t), (uint8_t*)&cpuID,
-                             &cc) != PECI_CC_SUCCESS)
+        CPUModel model{};
+        if (peci_GetCPUID(addr, &model, &cc) != PECI_CC_SUCCESS)
         {
             std::cerr << "Cannot get CPUID!\n";
             continue;
         }
 
-        crashdump::CPUModel model{};
-        bool modelFound = false;
-        for (int i = 0; i < crashdump::cpuIDMap.size(); i++)
-        {
-            if (cpuID == crashdump::cpuIDMap[i].cpuID)
-            {
-                model = crashdump::cpuIDMap[i].model;
-                modelFound = true;
-                break;
-            }
-        }
-        if (!modelFound)
-        {
-            std::cerr << "Cannot find Model for CPUID 0x" << std::hex << cpuID
-                      << "\n";
-            continue;
-        }
-
         switch (model)
         {
-            case crashdump::CPUModel::skx_h0:
+            case skx:
             {
                 // First check the MCA_ERR_SRC_LOG to see if this is the CPU
                 // that caused the IERR
@@ -513,8 +488,7 @@ static bool checkIERRCPUs()
                 }
                 break;
             }
-            case crashdump::CPUModel::icx_a0:
-            case crashdump::CPUModel::icx_b0:
+            case icx:
             {
                 // First check the MCA_ERR_SRC_LOG to see if this is the CPU
                 // that caused the IERR
@@ -918,46 +892,26 @@ static void pchThermtripHandler()
         });
 }
 
-static std::bitset<crashdump::maxCPUs> checkERRPinCPUs(const int errPin)
+static std::bitset<MAX_CPUS> checkERRPinCPUs(const int errPin)
 {
     int errPinSts = (1 << errPin);
-    std::bitset<crashdump::maxCPUs> errPinCPUs = 0;
-    for (int cpu = 0, addr = crashdump::minClientAddr;
-         addr <= crashdump::maxClientAddr; cpu++, addr++)
+    std::bitset<MAX_CPUS> errPinCPUs = 0;
+    for (int cpu = 0, addr = MIN_CLIENT_ADDR; addr <= MAX_CLIENT_ADDR;
+         cpu++, addr++)
     {
         if (peci_Ping(addr) == PECI_CC_SUCCESS)
         {
             uint8_t cc = 0;
-            uint32_t cpuID = 0;
-            if (peci_RdPkgConfig(addr, PECI_MBX_INDEX_CPU_ID,
-                                 PECI_PKG_ID_CPU_ID, sizeof(uint32_t),
-                                 (uint8_t*)&cpuID, &cc) != PECI_CC_SUCCESS)
+            CPUModel model{};
+            if (peci_GetCPUID(addr, &model, &cc) != PECI_CC_SUCCESS)
             {
                 std::cerr << "Cannot get CPUID!\n";
                 continue;
             }
 
-            crashdump::CPUModel model{};
-            bool modelFound = false;
-            for (int i = 0; i < crashdump::cpuIDMap.size(); i++)
-            {
-                if (cpuID == crashdump::cpuIDMap[i].cpuID)
-                {
-                    model = crashdump::cpuIDMap[i].model;
-                    modelFound = true;
-                    break;
-                }
-            }
-            if (!modelFound)
-            {
-                std::cerr << "Cannot find Model for CPUID 0x" << std::hex
-                          << cpuID << "\n";
-                continue;
-            }
-
             switch (model)
             {
-                case crashdump::CPUModel::skx_h0:
+                case skx:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
                     // the ERRx (B(0) D8 F0 offset 210h)
@@ -970,8 +924,7 @@ static std::bitset<crashdump::maxCPUs> checkERRPinCPUs(const int errPin)
                     }
                     break;
                 }
-                case crashdump::CPUModel::icx_a0:
-                case crashdump::CPUModel::icx_b0:
+                case icx:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
                     // the ERRx (B(30) D0 F3 offset 274h) (Note: Bus 30 is
@@ -996,7 +949,7 @@ static void errXAssertHandler(const int errPin,
 {
     // ERRx status is not guaranteed through the timeout, so save which
     // CPUs have it asserted
-    std::bitset<crashdump::maxCPUs> errPinCPUs = checkERRPinCPUs(errPin);
+    std::bitset<MAX_CPUS> errPinCPUs = checkERRPinCPUs(errPin);
     errXAssertTimer.expires_after(std::chrono::milliseconds(errTimeoutMs));
     errXAssertTimer.async_wait([errPin, errPinCPUs](
                                    const boost::system::error_code ec) {
