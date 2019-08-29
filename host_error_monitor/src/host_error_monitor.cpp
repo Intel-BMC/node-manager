@@ -66,7 +66,15 @@ static boost::asio::posix::stream_descriptor cpu2ThermtripEvent(io);
 static gpiod::line cpu1VRHotLine;
 static boost::asio::posix::stream_descriptor cpu1VRHotEvent(io);
 static gpiod::line cpu2VRHotLine;
+static boost::asio::posix::stream_descriptor cpu1MemABCDVRHotEvent(io);
+static gpiod::line cpu1MemEFGHVRHotLine;
+static boost::asio::posix::stream_descriptor cpu1MemEFGHVRHotEvent(io);
+static gpiod::line cpu2MemABCDVRHotLine;
 static boost::asio::posix::stream_descriptor cpu2VRHotEvent(io);
+static gpiod::line cpu1MemABCDVRHotLine;
+static boost::asio::posix::stream_descriptor cpu2MemABCDVRHotEvent(io);
+static gpiod::line cpu2MemEFGHVRHotLine;
+static boost::asio::posix::stream_descriptor cpu2MemEFGHVRHotEvent(io);
 //----------------------------------
 // PCH_BMC_THERMTRIP function related definition
 //----------------------------------
@@ -755,6 +763,58 @@ static void cpu1VRHotHandler()
                               });
 }
 
+static void cpu1MemABCDVRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu1MemABCDVRHotLine.event_read();
+
+        bool cpu1MemABCDVRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu1MemABCDVRHot)
+        {
+            cpuVRHotLog("CPU 1 Memory ABCD");
+        }
+    }
+    cpu1MemABCDVRHotEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 1 Memory ABCD VRHot handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            cpu1MemABCDVRHotHandler();
+        });
+}
+
+static void cpu1MemEFGHVRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu1MemEFGHVRHotLine.event_read();
+
+        bool cpu1MemEFGHVRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu1MemEFGHVRHot)
+        {
+            cpuVRHotLog("CPU 1 Memory EFGH");
+        }
+    }
+    cpu1MemEFGHVRHotEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 1 Memory EFGH VRHot handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            cpu1MemEFGHVRHotHandler();
+        });
+}
+
 static void cpu2VRHotHandler()
 {
     if (!hostOff)
@@ -778,6 +838,58 @@ static void cpu2VRHotHandler()
                                   }
                                   cpu2VRHotHandler();
                               });
+}
+
+static void cpu2MemABCDVRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu2MemABCDVRHotLine.event_read();
+
+        bool cpu2MemABCDVRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu2MemABCDVRHot)
+        {
+            cpuVRHotLog("CPU 2 Memory ABCD");
+        }
+    }
+    cpu2MemABCDVRHotEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 2 Memory ABCD VRHot handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            cpu2MemABCDVRHotHandler();
+        });
+}
+
+static void cpu2MemEFGHVRHotHandler()
+{
+    if (!hostOff)
+    {
+        gpiod::line_event gpioLineEvent = cpu2MemEFGHVRHotLine.event_read();
+
+        bool cpu2MemEFGHVRHot =
+            gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
+        if (cpu2MemEFGHVRHot)
+        {
+            cpuVRHotLog("CPU 2 Memory EFGH");
+        }
+    }
+    cpu2MemEFGHVRHotEvent.async_wait(
+        boost::asio::posix::stream_descriptor::wait_read,
+        [](const boost::system::error_code ec) {
+            if (ec)
+            {
+                std::cerr << "CPU 2 Memory EFGH VRHot handler error: "
+                          << ec.message() << "\n";
+                return;
+            }
+            cpu2MemEFGHVRHotHandler();
+        });
 }
 
 static void pchThermtripHandler()
@@ -1254,11 +1366,47 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    // Request CPU1_MEM_ABCD_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU1_MEM_ABCD_VRHOT", host_error_monitor::cpu1MemABCDVRHotHandler,
+            host_error_monitor::cpu1MemABCDVRHotLine,
+            host_error_monitor::cpu1MemABCDVRHotEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU1_MEM_EFGH_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU1_MEM_EFGH_VRHOT", host_error_monitor::cpu1MemEFGHVRHotHandler,
+            host_error_monitor::cpu1MemEFGHVRHotLine,
+            host_error_monitor::cpu1MemEFGHVRHotEvent))
+    {
+        return -1;
+    }
+
     // Request CPU2_VRHOT GPIO events
     if (!host_error_monitor::requestGPIOEvents(
             "CPU2_VRHOT", host_error_monitor::cpu2VRHotHandler,
             host_error_monitor::cpu2VRHotLine,
             host_error_monitor::cpu2VRHotEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_MEM_ABCD_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU2_MEM_ABCD_VRHOT", host_error_monitor::cpu2MemABCDVRHotHandler,
+            host_error_monitor::cpu2MemABCDVRHotLine,
+            host_error_monitor::cpu2MemABCDVRHotEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_MEM_EFGH_VRHOT GPIO events
+    if (!host_error_monitor::requestGPIOEvents(
+            "CPU2_MEM_EFGH_VRHOT", host_error_monitor::cpu2MemEFGHVRHotHandler,
+            host_error_monitor::cpu2MemEFGHVRHotLine,
+            host_error_monitor::cpu2MemEFGHVRHotEvent))
     {
         return -1;
     }
