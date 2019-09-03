@@ -324,11 +324,11 @@ static void pchThermtripHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (pchThermtrip)
         {
-            std::cout << "PCH Thermtrip detected \n";
+            std::cout << "PCH Thermal trip detected \n";
             // log to redfish, call API
-            sd_journal_send("MESSAGE=SSBThermtrip: SSB Thermtrip",
+            sd_journal_send("MESSAGE=SsbThermalTrip: SSB Thermal trip",
                             "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
-                            "OpenBMC.0.1.SSBThermtrip", NULL);
+                            "OpenBMC.0.1.SsbThermalTrip", NULL);
         }
     }
     pchThermtripEvent.async_wait(
@@ -336,7 +336,7 @@ static void pchThermtripHandler()
         [](const boost::system::error_code ec) {
             if (ec)
             {
-                std::cerr << "PCH Thermtrip handler error: " << ec.message()
+                std::cerr << "PCH Thermal trip handler error: " << ec.message()
                           << "\n";
                 return;
             }
