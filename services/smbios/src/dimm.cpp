@@ -28,6 +28,11 @@ void Dimm::memoryInfoUpdate(void)
     uint8_t *dataIn = regionS[0].regionData;
 
     dataIn = smbiosTypePtr(dataIn, memoryDeviceType);
+    if (dataIn == nullptr)
+    {
+        return;
+    }
+
     for (uint8_t index = 0; index < dimmNum; index++)
     {
         dataIn = smbiosNextPtr(dataIn);

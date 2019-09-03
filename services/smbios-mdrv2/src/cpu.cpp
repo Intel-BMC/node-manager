@@ -158,6 +158,11 @@ void Cpu::processorInfoUpdate(void)
     uint8_t *dataIn = storage;
 
     dataIn = getSMBIOSTypePtr(dataIn, processorsType);
+    if (dataIn == nullptr)
+    {
+        return;
+    }
+
     for (uint8_t index = 0; index < cpuNum; index++)
     {
         dataIn = smbiosNextPtr(dataIn);
