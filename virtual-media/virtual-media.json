@@ -16,6 +16,14 @@
             "UnixSocket": "/tmp/nbd1.sock",
             "Timeout": 30,
             "BlockSize": 512
+        },
+        "USB1": {
+            "EndpointId": "",
+            "Mode": 1,
+            "NBDDevice": "",
+            "UnixSocket": "",
+            "Timeout": 0,
+            "BlockSize": 0
         }
     }
 }

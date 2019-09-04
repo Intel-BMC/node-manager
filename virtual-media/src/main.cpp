@@ -1,3 +1,5 @@
+#include <sys/mount.h>
+
 #include <boost/asio.hpp>
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
@@ -338,6 +340,19 @@ class Process : public std::enable_shared_from_this<Process>
 class Configuration
 {
   public:
+    enum class Mode
+    {
+        // Proxy mode - works directly from browser and uses JavaScript/HTML5
+        // to communicate over Secure WebSockets directly to HTTPS endpoint
+        // hosted by bmcweb on BMC
+        Proxy = 0,
+
+        // Legacy mode - is initiated from browser using Redfish defined
+        // VirtualMedia schemas, then BMC process connects to external
+        // CIFS/HTTPS image pointed during initialization.
+        Legacy = 1,
+    };
+
     struct MountPoint
     {
         std::string nbdDevice;
@@ -345,6 +360,7 @@ class Configuration
         std::string endPointId;
         std::optional<int> timeout;
         std::optional<int> blocksize;
+        Mode mode;
 
         static std::vector<std::string> toArgs(const MountPoint& mp)
         {
@@ -476,6 +492,41 @@ class Configuration
                             std::cout << "BlockSize not set, use default\n";
                         }
                     }
+                    const auto modeIter = mountpoint.value().find("Mode");
+                    if (modeIter != mountpoint.value().cend())
+                    {
+                        const uint64_t* value =
+                            modeIter->get_ptr<const uint64_t*>();
+                        if (value)
+                        {
+                            if (*value == 0)
+                            {
+                                mp.mode = Configuration::Mode::Proxy;
+                            }
+                            else if (*value == 1)
+                            {
+                                mp.mode = Configuration::Mode::Legacy;
+                            }
+                            else
+                            {
+                                std::cerr << "Incorrect Mode, skip this mount "
+                                             "point\n";
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            std::cerr
+                                << "Mode not set, skip this mount point\n";
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        std::cerr
+                            << "Mode does not exist, skip this mount point\n";
+                        continue;
+                    }
                     mountPoints[mountpoint.key()] = std::move(mp);
                 }
             }
@@ -484,13 +535,51 @@ class Configuration
     }
 };
 
+class ParametersManager
+{
+  public:
+    struct Parameters
+    {
+        // Legacy mode specific parameters
+        std::string imageUrl;
+        std::string mountDirectoryPath;
+    };
+
+    ParametersManager()
+    {
+    }
+
+    void addMountPoint(const std::string& name)
+    {
+        Parameters parameters;
+        parameters.imageUrl.clear();
+        parameters.mountDirectoryPath.clear();
+        mountPoints[name] = std::move(parameters);
+    }
+
+    Parameters* getMountPoint(const std::string& name)
+    {
+        if (mountPoints.find(name) != mountPoints.end())
+        {
+            return &mountPoints[name];
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+
+  private:
+    boost::container::flat_map<std::string, Parameters> mountPoints;
+};
+
 class App
 {
   public:
     App(boost::asio::io_context& ioc, const Configuration& config,
         sd_bus* custom_bus = nullptr) :
         ioc(ioc),
-        devMonitor(ioc), config(config)
+        devMonitor(ioc), config(config), paramMgr()
     {
         if (!custom_bus)
         {
@@ -507,12 +596,25 @@ class App
             *bus, "/xyz/openbmc_project/VirtualMedia");
         for (const auto& entry : config.mountPoints)
         {
-            devMonitor.addDevice(entry.second.nbdDevice);
-            Process::addProcess(entry.first);
+            if (entry.second.mode == Configuration::Mode::Proxy)
+            {
+                devMonitor.addDevice(entry.second.nbdDevice);
+                Process::addProcess(entry.first);
+            }
 
             addMountPointInterface(entry.first, entry.second);
-            addProxyInterface(entry.first, entry.second);
-            addProcessInterface(entry.first);
+
+            if (entry.second.mode == Configuration::Mode::Proxy)
+            {
+                addProxyInterface(entry.first, entry.second);
+                addProcessInterface(entry.first);
+            }
+            else
+            {
+                addLegacyInterface(entry.first);
+            }
+
+            paramMgr.addMountPoint(entry.first);
         }
         devMonitor.run([this](const std::string& device, StateChange change) {
             configureUsbGadget(device, change);
@@ -530,20 +632,27 @@ class App
         return true;
     }
 
-    bool configureUsbGadget(const std::string& device, StateChange change)
+    int configureUsbGadget(const std::string& device, StateChange change,
+                           const std::string& lunFile = "")
     {
-        bool success = true;
+        int result = 0;
         std::error_code ec;
         if (change == StateChange::unknown)
         {
             std::cerr << "Change to unknown state is not possible\n";
-            return false;
+            return -1;
         }
-        StateChange currentState = devMonitor.getState(device);
-        if (currentState == StateChange::notmonitored)
+
+        // If lun file provided just use it to inject to the lun.0/file
+        // instead of /dev/<device>
+        std::string lunFileInternal;
+        if (lunFile.empty())
         {
-            std::cerr << "Unregistered device\n";
-            return false;
+            lunFileInternal = "/dev/" + device;
+        }
+        else
+        {
+            lunFileInternal = lunFile;
         }
 
         const fs::path gadgetDir =
@@ -574,7 +683,7 @@ class App
                 echoToFile(funcMassStorageDir / "lun.0/removable", "1");
                 echoToFile(funcMassStorageDir / "lun.0/ro", "1");
                 echoToFile(funcMassStorageDir / "lun.0/cdrom", "0");
-                echoToFile(funcMassStorageDir / "lun.0/file", "/dev/" + device);
+                echoToFile(funcMassStorageDir / "lun.0/file", lunFileInternal);
 
                 for (const auto& port : fs::directory_iterator(
                          "/sys/bus/platform/devices/1e6a0000.usb-vhub"))
@@ -586,7 +695,7 @@ class App
                         std::cout << "Use port : " << port.path().filename()
                                   << '\n';
                         echoToFile(gadgetDir / "UDC", portId);
-                        return true;
+                        return 0;
                     }
                 }
             }
@@ -594,13 +703,13 @@ class App
             {
                 // Got error perform cleanup
                 std::cerr << e.what() << '\n';
-                success = false;
+                result = -1;
             }
             catch (std::ofstream::failure& e)
             {
                 // Got error perform cleanup
                 std::cerr << e.what() << '\n';
-                success = false;
+                result = -1;
             }
         }
         // StateChange: unknown, notmonitored, inserted were handler
@@ -635,21 +744,50 @@ class App
         if (ec)
         {
             std::cerr << ec.message() << '\n';
+            result = -1;
         }
-        return (success && !static_cast<bool>(ec));
+
+        return result;
     }
 
     void addMountPointInterface(const std::string& name,
                                 const Configuration::MountPoint& mp)
     {
+        std::string objPath;
+        if (mp.mode == Configuration::Mode::Proxy)
+        {
+            objPath = "/xyz/openbmc_project/VirtualMedia/Proxy/";
+        }
+        else
+        {
+            objPath = "/xyz/openbmc_project/VirtualMedia/Legacy/";
+        }
+
         auto iface = objServer->add_interface(
-            "/xyz/openbmc_project/VirtualMedia/Proxy/" + name,
-            "xyz.openbmc_project.VirtualMedia.MountPoint");
+            objPath + name, "xyz.openbmc_project.VirtualMedia.MountPoint");
         iface->register_property("Device", mp.nbdDevice);
         iface->register_property("EndpointId", mp.endPointId);
         iface->register_property("Socket", mp.unixSocket);
         iface->register_property("Timeout", *mp.timeout);
         iface->register_property("BlockSize", *mp.blocksize);
+        iface->register_property(
+            "ImageUrl", std::string(""),
+            [](const std::string& req, std::string& property) {
+                throw sdbusplus::exception::SdBusError(
+                    EPERM, "Setting ImageUrl property is not allowed");
+                return -1;
+            },
+            [this, name](const std::string& property) {
+                auto parameters = paramMgr.getMountPoint(name);
+                if (parameters == nullptr)
+                {
+                    return std::string("");
+                }
+                else
+                {
+                    return parameters->imageUrl;
+                }
+            });
         iface->initialize();
     };
 
@@ -675,6 +813,232 @@ class App
         iface->initialize();
     }
 
+    int prepareTempDirForLegacyMode(std::string& path)
+    {
+        int result = -1;
+        char mountPathTemplate[] = "/tmp/vm_legacy.XXXXXX";
+        const char* tmpPath = mkdtemp(mountPathTemplate);
+        if (tmpPath != nullptr)
+        {
+            path = tmpPath;
+            result = 0;
+        }
+
+        return result;
+    }
+
+    bool checkUrl(const std::string& urlScheme, const std::string& imageUrl)
+    {
+        if (urlScheme.compare(imageUrl.substr(0, urlScheme.size())) == 0)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    bool getImagePathFromUrl(const std::string& urlScheme,
+                             const std::string& imageUrl,
+                             std::string* imagePath)
+    {
+        if (checkUrl(urlScheme, imageUrl))
+        {
+            if (imagePath != nullptr)
+            {
+                *imagePath = imageUrl.substr(urlScheme.size() - 1);
+                return true;
+            }
+            else
+            {
+                std::cerr << "Invalid parameter provied\n";
+                return false;
+            }
+        }
+        else
+        {
+            std::cerr << "Provied url does not match scheme\n";
+            return false;
+        }
+    }
+
+    bool checkHttpsUrl(const std::string& imageUrl)
+    {
+        return checkUrl("https://", imageUrl);
+    }
+
+    bool getImagePathFromHttpsUrl(const std::string& imageUrl,
+                                  std::string* imagePath)
+    {
+        return getImagePathFromUrl("https://", imageUrl, imagePath);
+    }
+
+    bool checkCifsUrl(const std::string& imageUrl)
+    {
+        return checkUrl("smb://", imageUrl);
+    }
+
+    bool getImagePathFromCifsUrl(const std::string& imageUrl,
+                                 std::string* imagePath)
+    {
+        return getImagePathFromUrl("smb://", imageUrl, imagePath);
+    }
+
+    fs::path getImagePath(const std::string& imageUrl)
+    {
+        std::string imagePath;
+
+        if (getImagePathFromHttpsUrl(imageUrl, &imagePath))
+        {
+            return fs::path(imagePath);
+        }
+        else if (getImagePathFromCifsUrl(imageUrl, &imagePath))
+        {
+            return fs::path(imagePath);
+        }
+        else
+        {
+            std::cerr << "Unrecognized url's scheme encountered\n";
+            return fs::path("");
+        }
+    }
+
+    int mountCifsUrlForLegcyMode(const std::string& name,
+                                 const std::string& imageUrl,
+                                 ParametersManager::Parameters* parameters)
+    {
+        int result = -1;
+        fs::path imageUrlPath = getImagePath(imageUrl);
+        const std::string imageUrlParentPath =
+            "/" + imageUrlPath.parent_path().string();
+        std::string mountDirectoryPath;
+        result = prepareTempDirForLegacyMode(mountDirectoryPath);
+        if (result != 0)
+        {
+            std::cerr << "Failed to create tmp directory\n";
+            return result;
+        }
+
+        result = mount(imageUrlParentPath.c_str(), mountDirectoryPath.c_str(),
+                       "cifs", 0,
+                       "username=,password=,nolock,sec="
+                       "ntlmsspi,seal,vers=3.0");
+        if (result != 0)
+        {
+            std::cerr << "Failed to mount the url\n";
+            fs::remove_all(fs::path(mountDirectoryPath));
+            return result;
+        }
+
+        const std::string imageMountPath =
+            mountDirectoryPath + "/" + imageUrlPath.filename().string();
+        result =
+            configureUsbGadget(name, StateChange::inserted, imageMountPath);
+        if (result != 0)
+        {
+            std::cerr << "Failed to run usb gadget\n";
+            umount(mountDirectoryPath.c_str());
+            fs::remove_all(fs::path(mountDirectoryPath));
+            return result;
+        }
+
+        parameters->mountDirectoryPath = mountDirectoryPath;
+
+        return result;
+    }
+
+    int umountCifsUrlForLegcyMode(const std::string& name,
+                                  ParametersManager::Parameters* parameters)
+    {
+        int result = -1;
+
+        result = configureUsbGadget(name, StateChange::removed);
+        if (result != 0)
+        {
+            std::cerr << "Failed to unmount resource\n";
+            return result;
+        }
+
+        umount(parameters->mountDirectoryPath.c_str());
+        fs::remove_all(fs::path(parameters->mountDirectoryPath));
+        parameters->mountDirectoryPath.clear();
+
+        return result;
+    }
+
+    void addLegacyInterface(const std::string& name)
+    {
+        auto iface = objServer->add_interface(
+            "/xyz/openbmc_project/VirtualMedia/Legacy/" + name,
+            "xyz.openbmc_project.VirtualMedia.Legacy");
+        iface->register_method(
+            "Mount", [this, name](const std::string& imageUrl) {
+                auto parameters = paramMgr.getMountPoint(name);
+                if (parameters == nullptr)
+                {
+                    throw sdbusplus::exception::SdBusError(
+                        ENOENT, "Failed to find the node.");
+                }
+
+                if (!parameters->imageUrl.empty())
+                {
+                    throw sdbusplus::exception::SdBusError(
+                        ETXTBSY, "Node already used and resource mounted.");
+                }
+
+                if (checkCifsUrl(imageUrl))
+                {
+                    int result =
+                        mountCifsUrlForLegcyMode(name, imageUrl, parameters);
+                    if (result != 0)
+                    {
+                        throw sdbusplus::exception::SdBusError(
+                            -result, "Failed to mount cifs url.");
+                    }
+                }
+                else
+                {
+                    throw sdbusplus::exception::SdBusError(
+                        EINVAL, "Not supported url's scheme.");
+                }
+
+                parameters->imageUrl = imageUrl;
+            });
+        iface->register_method("Unmount", [this, name]() {
+            auto parameters = paramMgr.getMountPoint(name);
+            if (parameters == nullptr)
+            {
+                throw sdbusplus::exception::SdBusError(
+                    ENOENT, "Failed to find the node.");
+            }
+
+            if (parameters->imageUrl.empty())
+            {
+                throw sdbusplus::exception::SdBusError(
+                    ENOENT, "Node is not used and no resource mounted.");
+            }
+
+            if (checkCifsUrl(parameters->imageUrl))
+            {
+                int result = umountCifsUrlForLegcyMode(name, parameters);
+                if (result != 0)
+                {
+                    throw sdbusplus::exception::SdBusError(
+                        -result, "Failed to unmount cifs resource.");
+                }
+            }
+            else
+            {
+                throw sdbusplus::exception::SdBusError(
+                    EINVAL, "Not supported url's scheme.");
+            }
+
+            parameters->imageUrl.clear();
+        });
+        iface->initialize();
+    }
+
     void addProcessInterface(const std::string& name)
     {
         auto iface = objServer->add_interface(
@@ -693,6 +1057,7 @@ class App
     std::shared_ptr<sdbusplus::asio::object_server> objServer;
     std::shared_ptr<sdbusplus::server::manager::manager> objManager;
     const Configuration& config;
+    ParametersManager paramMgr;
 };
 
 int main()
