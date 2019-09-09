@@ -58,8 +58,10 @@ static gpiod::line err2Line;
 static boost::asio::posix::stream_descriptor err2Event(io);
 static gpiod::line smiLine;
 static boost::asio::posix::stream_descriptor smiEvent(io);
+static gpiod::line cpu1FIVRFaultLine;
 static gpiod::line cpu1ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu1ThermtripEvent(io);
+static gpiod::line cpu2FIVRFaultLine;
 static gpiod::line cpu2ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu2ThermtripEvent(io);
 static gpiod::line cpu1VRHotLine;
@@ -129,6 +131,15 @@ static void smiTimeoutLog()
     sd_journal_send("MESSAGE=HostError: SMI Timeout", "PRIORITY=%i", LOG_INFO,
                     "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
                     "REDFISH_MESSAGE_ARGS=%s", "SMI Timeout", NULL);
+}
+
+static void cpuBootFIVRFaultLog(const int cpuNum)
+{
+    std::string msg = "Boot FIVR Fault on CPU " + std::to_string(cpuNum);
+
+    sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
+                    LOG_INFO, "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
+                    "REDFISH_MESSAGE_ARGS=%s", msg.c_str(), NULL);
 }
 
 static void cpuThermTripLog(const int cpuNum)
@@ -273,6 +284,30 @@ static bool requestGPIOEvents(
             }
             handler();
         });
+    return true;
+}
+
+static bool requestGPIOInput(const std::string& name, gpiod::line& gpioLine)
+{
+    // Find the GPIO line
+    gpioLine = gpiod::find_line(name);
+    if (!gpioLine)
+    {
+        std::cerr << "Failed to find the " << name << " line.\n";
+        return false;
+    }
+
+    // Request GPIO input
+    try
+    {
+        gpioLine.request({__FUNCTION__, gpiod::line_request::DIRECTION_INPUT});
+    }
+    catch (std::exception&)
+    {
+        std::cerr << "Failed to request " << name << " input\n";
+        return false;
+    }
+
     return true;
 }
 
@@ -667,7 +702,14 @@ static void caterrHandler()
 
 static void cpu1ThermtripAssertHandler()
 {
-    cpuThermTripLog(1);
+    if (cpu1FIVRFaultLine.get_value() == 0)
+    {
+        cpuBootFIVRFaultLog(1);
+    }
+    else
+    {
+        cpuThermTripLog(1);
+    }
 }
 
 static void cpu1ThermtripHandler()
@@ -698,7 +740,14 @@ static void cpu1ThermtripHandler()
 
 static void cpu2ThermtripAssertHandler()
 {
-    cpuThermTripLog(2);
+    if (cpu2FIVRFaultLine.get_value() == 0)
+    {
+        cpuBootFIVRFaultLog(2);
+    }
+    else
+    {
+        cpuThermTripLog(2);
+    }
 }
 
 static void cpu2ThermtripHandler()
@@ -1385,11 +1434,25 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    // Request CPU1_FIVR_FAULT GPIO input
+    if (!host_error_monitor::requestGPIOInput(
+            "CPU1_FIVR_FAULT", host_error_monitor::cpu1FIVRFaultLine))
+    {
+        return -1;
+    }
+
     // Request CPU1_THERMTRIP GPIO events
     if (!host_error_monitor::requestGPIOEvents(
             "CPU1_THERMTRIP", host_error_monitor::cpu1ThermtripHandler,
             host_error_monitor::cpu1ThermtripLine,
             host_error_monitor::cpu1ThermtripEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_FIVR_FAULT GPIO input
+    if (!host_error_monitor::requestGPIOInput(
+            "CPU2_FIVR_FAULT", host_error_monitor::cpu2FIVRFaultLine))
     {
         return -1;
     }
