@@ -366,8 +366,8 @@ void ColdRedundancy::createPSU(
 
                         conn->async_method_call(
                             [this, &conn,
-                             &interface](const boost::system::error_code ec,
-                                         PropertyMapType propMap) {
+                             interface](const boost::system::error_code ec,
+                                        PropertyMapType propMap) {
                                 if (ec)
                                 {
                                     std::cerr
