@@ -211,15 +211,20 @@ static std::shared_ptr<sdbusplus::bus::match::match> startHostStateMonitor()
             }
             hostOff = state == "xyz.openbmc_project.State.Host.HostState.Off";
 
-            // No host events should fire while off, so cancel any pending
-            // timers
             if (hostOff)
             {
+                // No host events should fire while off, so cancel any pending
+                // timers
                 caterrAssertTimer.cancel();
                 err0AssertTimer.cancel();
                 err1AssertTimer.cancel();
                 err2AssertTimer.cancel();
                 smiAssertTimer.cancel();
+            }
+            else
+            {
+                // Handle any initial errors when the host turns on
+                initializeErrorState();
             }
         });
 }
@@ -660,6 +665,11 @@ static void caterrHandler()
                            });
 }
 
+static void cpu1ThermtripAssertHandler()
+{
+    cpuThermTripLog(1);
+}
+
 static void cpu1ThermtripHandler()
 {
     if (!hostOff)
@@ -670,7 +680,7 @@ static void cpu1ThermtripHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1Thermtrip)
         {
-            cpuThermTripLog(1);
+            cpu1ThermtripAssertHandler();
         }
     }
     cpu1ThermtripEvent.async_wait(
@@ -686,6 +696,11 @@ static void cpu1ThermtripHandler()
         });
 }
 
+static void cpu2ThermtripAssertHandler()
+{
+    cpuThermTripLog(2);
+}
+
 static void cpu2ThermtripHandler()
 {
     if (!hostOff)
@@ -696,7 +711,7 @@ static void cpu2ThermtripHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2Thermtrip)
         {
-            cpuThermTripLog(2);
+            cpu2ThermtripAssertHandler();
         }
     }
     cpu2ThermtripEvent.async_wait(
@@ -712,6 +727,11 @@ static void cpu2ThermtripHandler()
         });
 }
 
+static void cpu1VRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1");
+}
+
 static void cpu1VRHotHandler()
 {
     if (!hostOff)
@@ -722,7 +742,7 @@ static void cpu1VRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1VRHot)
         {
-            cpuVRHotLog("CPU 1");
+            cpu1VRHotAssertHandler();
         }
     }
     cpu1VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
@@ -737,6 +757,11 @@ static void cpu1VRHotHandler()
                               });
 }
 
+static void cpu1MemABCDVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1 Memory ABCD");
+}
+
 static void cpu1MemABCDVRHotHandler()
 {
     if (!hostOff)
@@ -747,7 +772,7 @@ static void cpu1MemABCDVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1MemABCDVRHot)
         {
-            cpuVRHotLog("CPU 1 Memory ABCD");
+            cpu1MemABCDVRHotAssertHandler();
         }
     }
     cpu1MemABCDVRHotEvent.async_wait(
@@ -763,6 +788,11 @@ static void cpu1MemABCDVRHotHandler()
         });
 }
 
+static void cpu1MemEFGHVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1 Memory EFGH");
+}
+
 static void cpu1MemEFGHVRHotHandler()
 {
     if (!hostOff)
@@ -773,7 +803,7 @@ static void cpu1MemEFGHVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1MemEFGHVRHot)
         {
-            cpuVRHotLog("CPU 1 Memory EFGH");
+            cpu1MemEFGHVRHotAssertHandler();
         }
     }
     cpu1MemEFGHVRHotEvent.async_wait(
@@ -789,6 +819,11 @@ static void cpu1MemEFGHVRHotHandler()
         });
 }
 
+static void cpu2VRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2");
+}
+
 static void cpu2VRHotHandler()
 {
     if (!hostOff)
@@ -799,7 +834,7 @@ static void cpu2VRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2VRHot)
         {
-            cpuVRHotLog("CPU 2");
+            cpu2VRHotAssertHandler();
         }
     }
     cpu2VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
@@ -814,6 +849,11 @@ static void cpu2VRHotHandler()
                               });
 }
 
+static void cpu2MemABCDVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2 Memory ABCD");
+}
+
 static void cpu2MemABCDVRHotHandler()
 {
     if (!hostOff)
@@ -824,7 +864,7 @@ static void cpu2MemABCDVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2MemABCDVRHot)
         {
-            cpuVRHotLog("CPU 2 Memory ABCD");
+            cpu2MemABCDVRHotAssertHandler();
         }
     }
     cpu2MemABCDVRHotEvent.async_wait(
@@ -840,6 +880,11 @@ static void cpu2MemABCDVRHotHandler()
         });
 }
 
+static void cpu2MemEFGHVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2 Memory EFGH");
+}
+
 static void cpu2MemEFGHVRHotHandler()
 {
     if (!hostOff)
@@ -850,7 +895,7 @@ static void cpu2MemEFGHVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2MemEFGHVRHot)
         {
-            cpuVRHotLog("CPU 2 Memory EFGH");
+            cpu2MemEFGHVRHotAssertHandler();
         }
     }
     cpu2MemEFGHVRHotEvent.async_wait(
@@ -1223,6 +1268,54 @@ static void initializeErrorState()
     if (smiLine.get_value() == 0)
     {
         smiAssertHandler();
+    }
+
+    // Handle CPU1_THERMTRIP if it's asserted now
+    if (cpu1ThermtripLine.get_value() == 0)
+    {
+        cpu1ThermtripAssertHandler();
+    }
+
+    // Handle CPU2_THERMTRIP if it's asserted now
+    if (cpu2ThermtripLine.get_value() == 0)
+    {
+        cpu2ThermtripAssertHandler();
+    }
+
+    // Handle CPU1_VRHOT if it's asserted now
+    if (cpu1VRHotLine.get_value() == 0)
+    {
+        cpu1VRHotAssertHandler();
+    }
+
+    // Handle CPU1_MEM_ABCD_VRHOT if it's asserted now
+    if (cpu1MemABCDVRHotLine.get_value() == 0)
+    {
+        cpu1MemABCDVRHotAssertHandler();
+    }
+
+    // Handle CPU1_MEM_EFGH_VRHOT if it's asserted now
+    if (cpu1MemEFGHVRHotLine.get_value() == 0)
+    {
+        cpu1MemEFGHVRHotAssertHandler();
+    }
+
+    // Handle CPU2_VRHOT if it's asserted now
+    if (cpu2VRHotLine.get_value() == 0)
+    {
+        cpu2VRHotAssertHandler();
+    }
+
+    // Handle CPU2_MEM_ABCD_VRHOT if it's asserted now
+    if (cpu2MemABCDVRHotLine.get_value() == 0)
+    {
+        cpu2MemABCDVRHotAssertHandler();
+    }
+
+    // Handle CPU2_MEM_EFGH_VRHOT if it's asserted now
+    if (cpu2MemEFGHVRHotLine.get_value() == 0)
+    {
+        cpu2MemEFGHVRHotAssertHandler();
     }
 
     // Handle PCH_BMC_THERMTRIP if it's asserted now
