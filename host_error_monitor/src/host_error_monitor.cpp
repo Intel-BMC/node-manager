@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-#include <peci/libpeci.h>
+#include <peci.h>
 #include <systemd/sd-journal.h>
 
 #include <bitset>
 #include <boost/asio/posix/stream_descriptor.hpp>
-#include <crashdump/peci_cpus.hpp>
 #include <gpiod.hpp>
 #include <iostream>
 #include <sdbusplus/asio/object_server.hpp>
@@ -59,8 +58,10 @@ static gpiod::line err2Line;
 static boost::asio::posix::stream_descriptor err2Event(io);
 static gpiod::line smiLine;
 static boost::asio::posix::stream_descriptor smiEvent(io);
+static gpiod::line cpu1FIVRFaultLine;
 static gpiod::line cpu1ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu1ThermtripEvent(io);
+static gpiod::line cpu2FIVRFaultLine;
 static gpiod::line cpu2ThermtripLine;
 static boost::asio::posix::stream_descriptor cpu2ThermtripEvent(io);
 static gpiod::line cpu1VRHotLine;
@@ -130,6 +131,15 @@ static void smiTimeoutLog()
     sd_journal_send("MESSAGE=HostError: SMI Timeout", "PRIORITY=%i", LOG_INFO,
                     "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
                     "REDFISH_MESSAGE_ARGS=%s", "SMI Timeout", NULL);
+}
+
+static void cpuBootFIVRFaultLog(const int cpuNum)
+{
+    std::string msg = "Boot FIVR Fault on CPU " + std::to_string(cpuNum);
+
+    sd_journal_send("MESSAGE=HostError: %s", msg.c_str(), "PRIORITY=%i",
+                    LOG_INFO, "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.CPUError",
+                    "REDFISH_MESSAGE_ARGS=%s", msg.c_str(), NULL);
 }
 
 static void cpuThermTripLog(const int cpuNum)
@@ -212,15 +222,20 @@ static std::shared_ptr<sdbusplus::bus::match::match> startHostStateMonitor()
             }
             hostOff = state == "xyz.openbmc_project.State.Host.HostState.Off";
 
-            // No host events should fire while off, so cancel any pending
-            // timers
             if (hostOff)
             {
+                // No host events should fire while off, so cancel any pending
+                // timers
                 caterrAssertTimer.cancel();
                 err0AssertTimer.cancel();
                 err1AssertTimer.cancel();
                 err2AssertTimer.cancel();
                 smiAssertTimer.cancel();
+            }
+            else
+            {
+                // Handle any initial errors when the host turns on
+                initializeErrorState();
             }
         });
 }
@@ -269,6 +284,30 @@ static bool requestGPIOEvents(
             }
             handler();
         });
+    return true;
+}
+
+static bool requestGPIOInput(const std::string& name, gpiod::line& gpioLine)
+{
+    // Find the GPIO line
+    gpioLine = gpiod::find_line(name);
+    if (!gpioLine)
+    {
+        std::cerr << "Failed to find the " << name << " line.\n";
+        return false;
+    }
+
+    // Request GPIO input
+    try
+    {
+        gpioLine.request({__FUNCTION__, gpiod::line_request::DIRECTION_INPUT});
+    }
+    catch (std::exception&)
+    {
+        std::cerr << "Failed to request " << name << " input\n";
+        return false;
+    }
+
     return true;
 }
 
@@ -391,44 +430,20 @@ static void incrementCPUErrorCount(int cpuNum)
 static bool checkIERRCPUs()
 {
     bool cpuIERRFound = false;
-    for (int cpu = 0, addr = crashdump::minClientAddr;
-         addr <= crashdump::maxClientAddr; cpu++, addr++)
+    for (int cpu = 0, addr = MIN_CLIENT_ADDR; addr <= MAX_CLIENT_ADDR;
+         cpu++, addr++)
     {
-        if (peci_Ping(addr) != PECI_CC_SUCCESS)
-        {
-            continue;
-        }
         uint8_t cc = 0;
-        uint32_t cpuID = 0;
-        if (peci_RdPkgConfig(addr, PECI_MBX_INDEX_CPU_ID, PECI_PKG_ID_CPU_ID,
-                             sizeof(uint32_t), (uint8_t*)&cpuID,
-                             &cc) != PECI_CC_SUCCESS)
+        CPUModel model{};
+        if (peci_GetCPUID(addr, &model, &cc) != PECI_CC_SUCCESS)
         {
             std::cerr << "Cannot get CPUID!\n";
             continue;
         }
 
-        crashdump::CPUModel model{};
-        bool modelFound = false;
-        for (int i = 0; i < crashdump::cpuIDMap.size(); i++)
-        {
-            if (cpuID == crashdump::cpuIDMap[i].cpuID)
-            {
-                model = crashdump::cpuIDMap[i].model;
-                modelFound = true;
-                break;
-            }
-        }
-        if (!modelFound)
-        {
-            std::cerr << "Cannot find Model for CPUID 0x" << std::hex << cpuID
-                      << "\n";
-            continue;
-        }
-
         switch (model)
         {
-            case crashdump::CPUModel::skx_h0:
+            case skx:
             {
                 // First check the MCA_ERR_SRC_LOG to see if this is the CPU
                 // that caused the IERR
@@ -513,8 +528,7 @@ static bool checkIERRCPUs()
                 }
                 break;
             }
-            case crashdump::CPUModel::icx_a0:
-            case crashdump::CPUModel::icx_b0:
+            case icx:
             {
                 // First check the MCA_ERR_SRC_LOG to see if this is the CPU
                 // that caused the IERR
@@ -686,6 +700,18 @@ static void caterrHandler()
                            });
 }
 
+static void cpu1ThermtripAssertHandler()
+{
+    if (cpu1FIVRFaultLine.get_value() == 0)
+    {
+        cpuBootFIVRFaultLog(1);
+    }
+    else
+    {
+        cpuThermTripLog(1);
+    }
+}
+
 static void cpu1ThermtripHandler()
 {
     if (!hostOff)
@@ -696,7 +722,7 @@ static void cpu1ThermtripHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1Thermtrip)
         {
-            cpuThermTripLog(1);
+            cpu1ThermtripAssertHandler();
         }
     }
     cpu1ThermtripEvent.async_wait(
@@ -712,6 +738,18 @@ static void cpu1ThermtripHandler()
         });
 }
 
+static void cpu2ThermtripAssertHandler()
+{
+    if (cpu2FIVRFaultLine.get_value() == 0)
+    {
+        cpuBootFIVRFaultLog(2);
+    }
+    else
+    {
+        cpuThermTripLog(2);
+    }
+}
+
 static void cpu2ThermtripHandler()
 {
     if (!hostOff)
@@ -722,7 +760,7 @@ static void cpu2ThermtripHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2Thermtrip)
         {
-            cpuThermTripLog(2);
+            cpu2ThermtripAssertHandler();
         }
     }
     cpu2ThermtripEvent.async_wait(
@@ -738,6 +776,11 @@ static void cpu2ThermtripHandler()
         });
 }
 
+static void cpu1VRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1");
+}
+
 static void cpu1VRHotHandler()
 {
     if (!hostOff)
@@ -748,7 +791,7 @@ static void cpu1VRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1VRHot)
         {
-            cpuVRHotLog("CPU 1");
+            cpu1VRHotAssertHandler();
         }
     }
     cpu1VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
@@ -763,6 +806,11 @@ static void cpu1VRHotHandler()
                               });
 }
 
+static void cpu1MemABCDVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1 Memory ABCD");
+}
+
 static void cpu1MemABCDVRHotHandler()
 {
     if (!hostOff)
@@ -773,7 +821,7 @@ static void cpu1MemABCDVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1MemABCDVRHot)
         {
-            cpuVRHotLog("CPU 1 Memory ABCD");
+            cpu1MemABCDVRHotAssertHandler();
         }
     }
     cpu1MemABCDVRHotEvent.async_wait(
@@ -789,6 +837,11 @@ static void cpu1MemABCDVRHotHandler()
         });
 }
 
+static void cpu1MemEFGHVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 1 Memory EFGH");
+}
+
 static void cpu1MemEFGHVRHotHandler()
 {
     if (!hostOff)
@@ -799,7 +852,7 @@ static void cpu1MemEFGHVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu1MemEFGHVRHot)
         {
-            cpuVRHotLog("CPU 1 Memory EFGH");
+            cpu1MemEFGHVRHotAssertHandler();
         }
     }
     cpu1MemEFGHVRHotEvent.async_wait(
@@ -815,6 +868,11 @@ static void cpu1MemEFGHVRHotHandler()
         });
 }
 
+static void cpu2VRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2");
+}
+
 static void cpu2VRHotHandler()
 {
     if (!hostOff)
@@ -825,7 +883,7 @@ static void cpu2VRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2VRHot)
         {
-            cpuVRHotLog("CPU 2");
+            cpu2VRHotAssertHandler();
         }
     }
     cpu2VRHotEvent.async_wait(boost::asio::posix::stream_descriptor::wait_read,
@@ -840,6 +898,11 @@ static void cpu2VRHotHandler()
                               });
 }
 
+static void cpu2MemABCDVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2 Memory ABCD");
+}
+
 static void cpu2MemABCDVRHotHandler()
 {
     if (!hostOff)
@@ -850,7 +913,7 @@ static void cpu2MemABCDVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2MemABCDVRHot)
         {
-            cpuVRHotLog("CPU 2 Memory ABCD");
+            cpu2MemABCDVRHotAssertHandler();
         }
     }
     cpu2MemABCDVRHotEvent.async_wait(
@@ -866,6 +929,11 @@ static void cpu2MemABCDVRHotHandler()
         });
 }
 
+static void cpu2MemEFGHVRHotAssertHandler()
+{
+    cpuVRHotLog("CPU 2 Memory EFGH");
+}
+
 static void cpu2MemEFGHVRHotHandler()
 {
     if (!hostOff)
@@ -876,7 +944,7 @@ static void cpu2MemEFGHVRHotHandler()
             gpioLineEvent.event_type == gpiod::line_event::FALLING_EDGE;
         if (cpu2MemEFGHVRHot)
         {
-            cpuVRHotLog("CPU 2 Memory EFGH");
+            cpu2MemEFGHVRHotAssertHandler();
         }
     }
     cpu2MemEFGHVRHotEvent.async_wait(
@@ -918,46 +986,26 @@ static void pchThermtripHandler()
         });
 }
 
-static std::bitset<crashdump::maxCPUs> checkERRPinCPUs(const int errPin)
+static std::bitset<MAX_CPUS> checkERRPinCPUs(const int errPin)
 {
     int errPinSts = (1 << errPin);
-    std::bitset<crashdump::maxCPUs> errPinCPUs = 0;
-    for (int cpu = 0, addr = crashdump::minClientAddr;
-         addr <= crashdump::maxClientAddr; cpu++, addr++)
+    std::bitset<MAX_CPUS> errPinCPUs = 0;
+    for (int cpu = 0, addr = MIN_CLIENT_ADDR; addr <= MAX_CLIENT_ADDR;
+         cpu++, addr++)
     {
         if (peci_Ping(addr) == PECI_CC_SUCCESS)
         {
             uint8_t cc = 0;
-            uint32_t cpuID = 0;
-            if (peci_RdPkgConfig(addr, PECI_MBX_INDEX_CPU_ID,
-                                 PECI_PKG_ID_CPU_ID, sizeof(uint32_t),
-                                 (uint8_t*)&cpuID, &cc) != PECI_CC_SUCCESS)
+            CPUModel model{};
+            if (peci_GetCPUID(addr, &model, &cc) != PECI_CC_SUCCESS)
             {
                 std::cerr << "Cannot get CPUID!\n";
                 continue;
             }
 
-            crashdump::CPUModel model{};
-            bool modelFound = false;
-            for (int i = 0; i < crashdump::cpuIDMap.size(); i++)
-            {
-                if (cpuID == crashdump::cpuIDMap[i].cpuID)
-                {
-                    model = crashdump::cpuIDMap[i].model;
-                    modelFound = true;
-                    break;
-                }
-            }
-            if (!modelFound)
-            {
-                std::cerr << "Cannot find Model for CPUID 0x" << std::hex
-                          << cpuID << "\n";
-                continue;
-            }
-
             switch (model)
             {
-                case crashdump::CPUModel::skx_h0:
+                case skx:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
                     // the ERRx (B(0) D8 F0 offset 210h)
@@ -970,8 +1018,7 @@ static std::bitset<crashdump::maxCPUs> checkERRPinCPUs(const int errPin)
                     }
                     break;
                 }
-                case crashdump::CPUModel::icx_a0:
-                case crashdump::CPUModel::icx_b0:
+                case icx:
                 {
                     // Check the ERRPINSTS to see if this is the CPU that caused
                     // the ERRx (B(30) D0 F3 offset 274h) (Note: Bus 30 is
@@ -996,7 +1043,7 @@ static void errXAssertHandler(const int errPin,
 {
     // ERRx status is not guaranteed through the timeout, so save which
     // CPUs have it asserted
-    std::bitset<crashdump::maxCPUs> errPinCPUs = checkERRPinCPUs(errPin);
+    std::bitset<MAX_CPUS> errPinCPUs = checkERRPinCPUs(errPin);
     errXAssertTimer.expires_after(std::chrono::milliseconds(errTimeoutMs));
     errXAssertTimer.async_wait([errPin, errPinCPUs](
                                    const boost::system::error_code ec) {
@@ -1272,6 +1319,54 @@ static void initializeErrorState()
         smiAssertHandler();
     }
 
+    // Handle CPU1_THERMTRIP if it's asserted now
+    if (cpu1ThermtripLine.get_value() == 0)
+    {
+        cpu1ThermtripAssertHandler();
+    }
+
+    // Handle CPU2_THERMTRIP if it's asserted now
+    if (cpu2ThermtripLine.get_value() == 0)
+    {
+        cpu2ThermtripAssertHandler();
+    }
+
+    // Handle CPU1_VRHOT if it's asserted now
+    if (cpu1VRHotLine.get_value() == 0)
+    {
+        cpu1VRHotAssertHandler();
+    }
+
+    // Handle CPU1_MEM_ABCD_VRHOT if it's asserted now
+    if (cpu1MemABCDVRHotLine.get_value() == 0)
+    {
+        cpu1MemABCDVRHotAssertHandler();
+    }
+
+    // Handle CPU1_MEM_EFGH_VRHOT if it's asserted now
+    if (cpu1MemEFGHVRHotLine.get_value() == 0)
+    {
+        cpu1MemEFGHVRHotAssertHandler();
+    }
+
+    // Handle CPU2_VRHOT if it's asserted now
+    if (cpu2VRHotLine.get_value() == 0)
+    {
+        cpu2VRHotAssertHandler();
+    }
+
+    // Handle CPU2_MEM_ABCD_VRHOT if it's asserted now
+    if (cpu2MemABCDVRHotLine.get_value() == 0)
+    {
+        cpu2MemABCDVRHotAssertHandler();
+    }
+
+    // Handle CPU2_MEM_EFGH_VRHOT if it's asserted now
+    if (cpu2MemEFGHVRHotLine.get_value() == 0)
+    {
+        cpu2MemEFGHVRHotAssertHandler();
+    }
+
     // Handle PCH_BMC_THERMTRIP if it's asserted now
     if (pchThermtripLine.get_value() == 0)
     {
@@ -1339,11 +1434,25 @@ int main(int argc, char* argv[])
         return -1;
     }
 
+    // Request CPU1_FIVR_FAULT GPIO input
+    if (!host_error_monitor::requestGPIOInput(
+            "CPU1_FIVR_FAULT", host_error_monitor::cpu1FIVRFaultLine))
+    {
+        return -1;
+    }
+
     // Request CPU1_THERMTRIP GPIO events
     if (!host_error_monitor::requestGPIOEvents(
             "CPU1_THERMTRIP", host_error_monitor::cpu1ThermtripHandler,
             host_error_monitor::cpu1ThermtripLine,
             host_error_monitor::cpu1ThermtripEvent))
+    {
+        return -1;
+    }
+
+    // Request CPU2_FIVR_FAULT GPIO input
+    if (!host_error_monitor::requestGPIOInput(
+            "CPU2_FIVR_FAULT", host_error_monitor::cpu2FIVRFaultLine))
     {
         return -1;
     }
