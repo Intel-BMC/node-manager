@@ -1021,7 +1021,7 @@ EPECIStatus peci_raw(uint8_t target, uint8_t u8ReadLen, const uint8_t* pRawCmd,
     uint8_t u8RxBuf[PECI_BUFFER_SIZE];
     EPECIStatus ret;
 
-    if (pRawResp == NULL)
+    if (u8ReadLen && pRawResp == NULL)
     {
         return PECI_CC_INVALID_REQ;
     }
