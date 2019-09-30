@@ -175,6 +175,9 @@ void SpecialModeMgr::checkAndAddSpecialModeProperty(const std::string& provMode)
     {
         specialMode = manufacturingMode;
         specialModeLockoutSeconds = mtmAllowedTime - sysInfo.uptime;
+        sd_journal_send("MESSAGE=%s", "Manufacturing mode - Entered",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.ManufacturingModeEntered", NULL);
     }
     addSpecialModeProperty();
     if (!specialModeLockoutSeconds)
@@ -229,6 +232,9 @@ void SpecialModeMgr::updateTimer(int countInSeconds)
         }
         iface->set_property(strSpecialMode,
                             static_cast<uint8_t>(manufacturingExpired));
+        sd_journal_send("MESSAGE=%s", "Manufacturing mode - Exited",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.ManufacturingModeExited", NULL);
     });
 }
 
