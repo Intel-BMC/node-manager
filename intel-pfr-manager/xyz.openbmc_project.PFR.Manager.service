@@ -8,7 +8,7 @@ RestartSec=5
 StartLimitInterval=0
 SyslogIdentifier=intel-pfr-manager
 Type=dbus
-BusName=xyz.openbmc_project.Intel.PFR.Manager
+BusName=xyz.openbmc_project.PFR.Manager
 
 [Install]
 WantedBy=multi-user.target

@@ -275,10 +275,10 @@ int main()
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
     stateTimer = std::make_unique<boost::asio::steady_timer>(io);
     initTimer = std::make_unique<boost::asio::steady_timer>(io);
-    conn->request_name("xyz.openbmc_project.Intel.PFR.Manager");
+    conn->request_name("xyz.openbmc_project.PFR.Manager");
     auto server = sdbusplus::asio::object_server(conn);
 
-    // Create Intel PFR attributes object and interface
+    // Create PFR attributes object and interface
     pfrConfigObject = std::make_unique<intel::pfr::PfrConfig>(server, conn);
 
     pfrVersionObjects.clear();

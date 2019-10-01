@@ -88,9 +88,8 @@ PfrConfig::PfrConfig(sdbusplus::asio::object_server &srv_,
     server(srv_),
     conn(conn_)
 {
-    pfrCfgIface =
-        server.add_interface("/xyz/openbmc_project/intel_pfr",
-                             "xyz.openbmc_project.Intel_PFR.Attributes");
+    pfrCfgIface = server.add_interface("/xyz/openbmc_project/pfr",
+                                       "xyz.openbmc_project.PFR.Attributes");
 
     getProvisioningStatus(ufmLocked, ufmProvisioned);
 
