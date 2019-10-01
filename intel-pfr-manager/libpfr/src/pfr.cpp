@@ -20,6 +20,7 @@
 #include <iomanip>
 #include "pfr.hpp"
 #include "file.hpp"
+#include "spiDev.hpp"
 
 namespace intel
 {
@@ -44,15 +45,23 @@ static constexpr uint8_t provisioningStatus = 0x0A;
 static constexpr uint8_t bmcBootCheckpoint = 0x0F;
 static constexpr uint8_t pchActiveMajorVersion = 0x15;
 static constexpr uint8_t pchActiveMinorVersion = 0x16;
-static constexpr uint8_t bmcActiveMajorVersion = 0x18;
-static constexpr uint8_t bmcActiveMinorVersion = 0x19;
 static constexpr uint8_t pchRecoveryMajorVersion = 0x1B;
 static constexpr uint8_t pchRecoveryMinorVersion = 0x1C;
-static constexpr uint8_t bmcRecoveryMajorVersion = 0x1E;
-static constexpr uint8_t bmcRecoveryMinorVersion = 0x1F;
 
 static constexpr uint8_t ufmLockedMask = (0x1 << 0x04);
 static constexpr uint8_t ufmProvisionedMask = (0x1 << 0x05);
+
+// PFR MTD devices
+static constexpr const char* bmcActiveImgPfmMTDDev = "/dev/mtd/pfm";
+static constexpr const char* bmcRecoveryImgMTDDev = "/dev/mtd/rc-image";
+
+// PFM offset in full image
+static constexpr const uint32_t pfmBaseOffsetInImage = 0x400;
+
+// OFFSET values in PFM
+static constexpr const uint32_t verOffsetInPFM = 0x406;
+static constexpr const uint32_t buildNumOffsetInPFM = 0x40C;
+static constexpr const uint32_t buildHashOffsetInPFM = 0x40D;
 
 std::string toHexString(const uint8_t val)
 {
@@ -62,50 +71,11 @@ std::string toHexString(const uint8_t val)
     return stream.str();
 }
 
-std::string getVersionInfoCPLD(ImageType& imgType)
+static std::string readVersionFromCPLD(const uint8_t majorReg,
+                                       const uint8_t minorReg)
 {
     try
     {
-        uint8_t majorReg;
-        uint8_t minorReg;
-
-        switch (imgType)
-        {
-            case (ImageType::cpld):
-            {
-                majorReg = cpldROTVersion;
-                minorReg = cpldROTSvn;
-                break;
-            }
-            case (ImageType::biosActive):
-            {
-                majorReg = pchActiveMajorVersion;
-                minorReg = pchActiveMinorVersion;
-                break;
-            }
-            case (ImageType::biosRecovery):
-            {
-                majorReg = pchRecoveryMajorVersion;
-                minorReg = pchRecoveryMinorVersion;
-                break;
-            }
-            case (ImageType::bmcActive):
-            {
-                majorReg = bmcActiveMajorVersion;
-                minorReg = bmcActiveMinorVersion;
-                break;
-            }
-            case (ImageType::bmcRecovery):
-            {
-                majorReg = bmcRecoveryMajorVersion;
-                minorReg = bmcRecoveryMinorVersion;
-                break;
-            }
-            default:
-                // Invalid image Type.
-                return "";
-        }
-
         I2CFile cpldDev(i2cBusNumber, i2cSlaveAddress, O_RDWR | O_CLOEXEC);
         uint8_t majorVer = cpldDev.i2cReadByteData(majorReg);
         uint8_t minorVer = cpldDev.i2cReadByteData(minorReg);
@@ -116,9 +86,96 @@ std::string getVersionInfoCPLD(ImageType& imgType)
     catch (const std::exception& e)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Exception caught in getVersionInfoCPLD.",
+            "Exception caught in readVersionFromCPLD.",
             phosphor::logging::entry("MSG=%s", e.what()));
         return "";
+    }
+}
+
+static std::string readBMCVersionFromSPI(const ImageType& imgType)
+{
+    std::string mtdDev;
+    uint32_t verOffset = verOffsetInPFM;
+    uint32_t bldNumOffset = buildNumOffsetInPFM;
+    uint32_t bldHashOffset = buildHashOffsetInPFM;
+
+    if (imgType == ImageType::bmcActive)
+    {
+        // For Active image, PFM is emulated as separate MTD device.
+        mtdDev = bmcActiveImgPfmMTDDev;
+    }
+    else if (imgType == ImageType::bmcRecovery)
+    {
+        // For Recovery image, PFM is part of compressed Image
+        // at offset 0x400.
+        mtdDev = bmcRecoveryImgMTDDev;
+        verOffset += pfmBaseOffsetInImage;
+        bldNumOffset += pfmBaseOffsetInImage;
+        bldHashOffset += pfmBaseOffsetInImage;
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid image type passed to readBMCVersionFromSPI.");
+        return "";
+    }
+
+    uint8_t buildNo = 0;
+    std::array<uint8_t, 2> ver;
+    std::array<uint8_t, 3> buildHash;
+
+    try
+    {
+        SPIDev spiDev(mtdDev);
+        spiDev.spiReadData(verOffset, ver.size(),
+                           reinterpret_cast<void*>(ver.data()));
+        spiDev.spiReadData(bldNumOffset, sizeof(buildNo),
+                           reinterpret_cast<void*>(&buildNo));
+        spiDev.spiReadData(bldHashOffset, buildHash.size(),
+                           reinterpret_cast<void*>(buildHash.data()));
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Exception caught in readBMCVersionFromSPI.",
+            phosphor::logging::entry("MSG=%s", e.what()));
+        return "";
+    }
+    // Version format: <major>.<minor>-<build bum>-<build hash>
+    // Example: 00.11-07-1e5c2d
+    std::string version = toHexString(ver[0]) + "." + toHexString(ver[1]) +
+                          "-" + toHexString(buildNo) + "-" +
+                          toHexString(buildHash[0]) +
+                          toHexString(buildHash[1]) + toHexString(buildHash[2]);
+    return version;
+}
+
+std::string getFirmwareVersion(const ImageType& imgType)
+{
+    switch (imgType)
+    {
+        case (ImageType::cpld):
+        {
+            return readVersionFromCPLD(cpldROTVersion, cpldROTSvn);
+        }
+        case (ImageType::biosActive):
+        {
+            return readVersionFromCPLD(pchActiveMajorVersion,
+                                       pchActiveMinorVersion);
+        }
+        case (ImageType::biosRecovery):
+        {
+            return readVersionFromCPLD(pchRecoveryMajorVersion,
+                                       pchRecoveryMinorVersion);
+        }
+        case (ImageType::bmcActive):
+        case (ImageType::bmcRecovery):
+        {
+            return readBMCVersionFromSPI(imgType);
+        }
+        default:
+            // Invalid image Type.
+            return "";
     }
 }
 

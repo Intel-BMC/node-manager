@@ -31,7 +31,7 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
     server(srv_),
     conn(conn_), path(path_), imgType(imgType_), purpose(purpose_)
 {
-    version = getVersionInfoCPLD(imgType);
+    version = getFirmwareVersion(imgType);
 
     std::string objPath = "/xyz/openbmc_project/software/" + path;
     versionIface =
@@ -75,7 +75,7 @@ void PfrVersion::updateVersion()
 {
     if (versionIface && versionIface->is_initialized())
     {
-        std::string ver = getVersionInfoCPLD(imgType);
+        std::string ver = getFirmwareVersion(imgType);
         internalSet = true;
         versionIface->set_property(versionStr, ver);
         internalSet = false;
