@@ -421,9 +421,9 @@ class GetMeVer
                                      nmdMeVerIntf);
 
         iface->register_property(
-            "VersionPurpose",
+            "Purpose",
             std::string(
-                "xyz.openbmc_project.Software.Version.VersionPurpose.Other"));
+                "xyz.openbmc_project.Software.Version.VersionPurpose.ME"));
 
         iface->register_property(
             "Version", std::string(""),
