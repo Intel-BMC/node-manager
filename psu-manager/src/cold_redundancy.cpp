@@ -31,9 +31,10 @@
 
 static constexpr const bool debug = false;
 
-static constexpr const std::array<const char*, 2> psuInterfaceTypes = {
+static constexpr const std::array<const char*, 3> psuInterfaceTypes = {
     "xyz.openbmc_project.Configuration.pmbus",
-    "xyz.openbmc_project.Configuration.PSUPresence"};
+    "xyz.openbmc_project.Configuration.PSUPresence",
+    "xyz.openbmc_project.Configuration.PURedundancy"};
 static const constexpr char* inventoryPath =
     "/xyz/openbmc_project/inventory/system";
 static const constexpr char* eventPath = "/xyz/openbmc_project/State/Decorator";
@@ -52,7 +53,7 @@ ColdRedundancy::ColdRedundancy(
         *systemBus, coldRedundancyPath),
     timerRotation(io), timerCheck(io), systemBus(systemBus),
     warmRedundantTimer1(io), warmRedundantTimer2(io), keepAliveTimer(io),
-    filterTimer(io)
+    filterTimer(io), puRedundantTimer(io)
 {
     io.post([this, &io, &objectServer, &systemBus]() {
         createPSU(io, objectServer, systemBus);
@@ -196,26 +197,26 @@ ColdRedundancy::ColdRedundancy(
 
             for (auto& psu : powerSupplies)
             {
-
                 if (psu->name != psuName)
                 {
                     continue;
                 }
 
-                std::string psuEventName = "OperationalStatus";
+                std::string psuEventName = "functional";
                 auto findEvent = values.find(psuEventName);
                 if (findEvent != values.end())
                 {
                     if (std::get<bool>(findEvent->second))
                     {
-                        psu->state = PSUState::acLost;
+                        psu->state = PSUState::normal;
                     }
                     else
                     {
-                        psu->state = PSUState::normal;
+                        psu->state = PSUState::acLost;
                     }
                 }
             }
+            checkRedundancyEvent();
         };
 
     for (const char* type : psuInterfaceTypes)
@@ -388,8 +389,30 @@ void ColdRedundancy::createPSU(
                                                  "entry in configuration\n";
                                     return;
                                 }
+
                                 if (interface == "xyz.openbmc_project."
-                                                 "Configuration.PSUPresence")
+                                                 "Configuration.PURedundancy")
+                                {
+                                    uint64_t* redunancyCount =
+                                        std::get_if<uint64_t>(
+                                            &propMap["RedundantCount"]);
+                                    if (redunancyCount != nullptr)
+                                    {
+                                        redundancyPSURequire =
+                                            static_cast<uint8_t>(
+                                                *redunancyCount);
+                                    }
+                                    else
+                                    {
+                                        std::cerr << "Failed to get Power Unit "
+                                                     "Redundancy count, will "
+                                                     "use default value\n";
+                                    }
+                                    return;
+                                }
+                                else if (interface ==
+                                         "xyz.openbmc_project."
+                                         "Configuration.PSUPresence")
                                 {
                                     auto psuBus =
                                         std::get_if<uint64_t>(&propMap["Bus"]);
@@ -422,6 +445,16 @@ void ColdRedundancy::createPSU(
                                                  "entry in configuration\n";
                                     return;
                                 }
+                                for (auto& psu : powerSupplies)
+                                {
+                                    if ((static_cast<uint8_t>(*configBus) ==
+                                         psu->bus) &&
+                                        (static_cast<uint8_t>(*configAddress) ==
+                                         psu->address))
+                                    {
+                                        return;
+                                    }
+                                }
 
                                 powerSupplies.emplace_back(
                                     std::make_unique<PowerSupply>(
@@ -437,6 +470,7 @@ void ColdRedundancy::createPSU(
                     }
                 }
             }
+            checkRedundancyEvent();
         },
         "xyz.openbmc_project.ObjectMapper",
         "/xyz/openbmc_project/object_mapper",
@@ -695,4 +729,118 @@ void ColdRedundancy::putWarmRedundant(void)
 
 PowerSupply::~PowerSupply()
 {
+}
+
+void ColdRedundancy::checkRedundancyEvent()
+{
+    puRedundantTimer.expires_after(std::chrono::seconds(2));
+    puRedundantTimer.async_wait([this](const boost::system::error_code& ec) {
+        if (ec == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+
+        uint8_t psuWorkable = 0;
+        static uint8_t psuPreviousWorkable = numberOfPSU;
+
+        for (const auto& psu : powerSupplies)
+        {
+            if (psu->state == PSUState::normal)
+            {
+                psuWorkable++;
+            }
+        }
+
+        if (psuWorkable > psuPreviousWorkable)
+        {
+            if (psuWorkable > redundancyPSURequire)
+            {
+                if (psuWorkable == numberOfPSU)
+                {
+                    // When all PSU are work correctly, it is full redundant
+                    sd_journal_send(
+                        "MESSAGE=%s", "Power Unit Full Redundancy Regained",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.PowerUnitRedundancyRegained", NULL);
+                }
+                else if (psuPreviousWorkable <= redundancyPSURequire)
+                {
+                    // Not all PSU can work correctly but system still in
+                    // redundancy mode and previous status is non redundant
+                    sd_journal_send(
+                        "MESSAGE=%s",
+                        "Power Unit Redundancy Regained but not in Full "
+                        "Redundancy",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.PowerUnitDegradedFromNonRedundant", NULL);
+                }
+            }
+            else if (psuPreviousWorkable == 0)
+            {
+                // Now system is not in redundancy mode but still some PSU are
+                // workable and previously there is no any workable PSU in the
+                // system
+                sd_journal_send(
+                    "MESSAGE=%s",
+                    "Power Unit Redundancy Sufficient from insufficient",
+                    "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                    "OpenBMC.0.1.PowerUnitNonRedundantFromInsufficient", NULL);
+            }
+        }
+        else if (psuWorkable < psuPreviousWorkable)
+        {
+            if (psuWorkable > redundancyPSURequire)
+            {
+                // One PSU is now not workable, but other workable PSU can still
+                // support redundancy mode.
+                sd_journal_send(
+                    "MESSAGE=%s", "Power Unit Redundancy Degraded",
+                    "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
+                    "OpenBMC.0.1.PowerUnitRedundancyDegraded", NULL);
+
+                if (psuPreviousWorkable == numberOfPSU)
+                {
+                    // One PSU become not workable and system was in full
+                    // redundancy mode.
+                    sd_journal_send(
+                        "MESSAGE=%s",
+                        "Power Unit Redundancy Degraded from Full Redundant",
+                        "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.PowerUnitDegradedFromRedundant", NULL);
+                }
+            }
+            else
+            {
+                if (psuPreviousWorkable > redundancyPSURequire)
+                {
+                    // No enough workable PSU to support redundancy and
+                    // previously system is in redundancy mode.
+                    sd_journal_send(
+                        "MESSAGE=%s", "Power Unit Redundancy Lost",
+                        "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.PowerUnitRedundancyLost", NULL);
+                    if (psuWorkable > 0)
+                    {
+                        // There still some workable PSU, but system is not
+                        // in redundancy mode.
+                        sd_journal_send(
+                            "MESSAGE=%s",
+                            "Power Unit Redundancy NonRedundant Sufficient",
+                            "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
+                            "OpenBMC.0.1.PowerUnitNonRedundantSufficient",
+                            NULL);
+                    }
+                }
+                if (psuWorkable == 0)
+                {
+                    // No any workable PSU on the system.
+                    sd_journal_send(
+                        "MESSAGE=%s", "Power Unit Redundancy Insufficient",
+                        "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.PowerUnitNonRedundantInsufficient", NULL);
+                }
+            }
+        }
+        psuPreviousWorkable = psuWorkable;
+    });
 }
