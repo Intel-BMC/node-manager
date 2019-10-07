@@ -287,13 +287,6 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
 
     setting = &settings.emplace_back(
-        objectServer, "/xyz/openbmc_project/control/host0/restart_cause",
-        "xyz.openbmc_project.Common.RestartCause");
-
-    setting->addProperty("RestartCause",
-                         "xyz.openbmc_project.State.Host.RestartCause.Unknown");
-
-    setting = &settings.emplace_back(
         objectServer, "/xyz/openbmc_project/control/host0/ac_boot",
         "xyz.openbmc_project.Common.ACBoot");
 
