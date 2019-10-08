@@ -36,8 +36,9 @@ ProvModeMgr::ProvModeMgr(
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     "Error in querying provision mode",
                     phosphor::logging::entry("MSG=%s", ec.message().c_str()));
-                phosphor::logging::elog<sdbusplus::xyz::openbmc_project::
-                                            Common::Error::InternalFailure>();
+                provMode =
+                    secCtrl::RestrictionMode::Modes::ProvisionedHostDisabled;
+                // Fall through - Continue with ProvisionedHostDisabled value.
             }
             if (modeStr.empty())
             {
@@ -65,8 +66,7 @@ void ProvModeMgr::updateProvModeProperty(
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     "RestrictionMode set-property failed",
                     phosphor::logging::entry("MSG=%s", ec.message().c_str()));
-                phosphor::logging::elog<sdbusplus::xyz::openbmc_project::
-                                            Common::Error::InternalFailure>();
+                // Continue, even for u-boot param update failure.
             }
         },
         uBootEnvMgrService, uBootEnvMgrPath, uBootEnvMgrIntf,
@@ -101,9 +101,7 @@ void ProvModeMgr::init()
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     "RestrictionMode set-property failed",
                     phosphor::logging::entry("Mode=%s", req.c_str()),
-                    phosphor::logging::entry("EXCEPTION:%s", e.what()));
-                phosphor::logging::elog<sdbusplus::xyz::openbmc_project::
-                                            Common::Error::InternalFailure>();
+                    phosphor::logging::entry("EXCEPTION=%s", e.what()));
             }
             return 0;
         },
