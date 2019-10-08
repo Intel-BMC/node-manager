@@ -898,6 +898,81 @@ EPECIStatus peci_RdEndPointConfigMmio_seq(
 }
 
 /*-------------------------------------------------------------------------
+ * This internal function is the common interface for WdEndPointConfig to PCI
+ *------------------------------------------------------------------------*/
+static EPECIStatus peci_WrEndPointConfigCommon(uint8_t target,
+                                               uint8_t u8MsgType, uint8_t u8Seg,
+                                               uint8_t u8Bus, uint8_t u8Device,
+                                               uint8_t u8Fcn, uint16_t u16Reg,
+                                               uint8_t DataLen,
+                                               uint32_t DataVal, uint8_t* cc)
+{
+    int peci_fd = -1;
+    struct peci_wr_end_pt_cfg_msg cmd;
+    EPECIStatus ret;
+
+    if (cc == NULL)
+    {
+        return PECI_CC_INVALID_REQ;
+    }
+
+    // Per the PECI spec, the write length must be a byte, word, or dword
+    if (DataLen != 1 && DataLen != 2 && DataLen != 4)
+    {
+        return PECI_CC_INVALID_REQ;
+    }
+
+    if (peci_Open(&peci_fd) != PECI_CC_SUCCESS)
+    {
+        return PECI_CC_DRIVER_ERR;
+    }
+
+    cmd.addr = target;
+    cmd.msg_type = u8MsgType;
+    cmd.params.pci_cfg.seg = u8Seg;
+    cmd.params.pci_cfg.bus = u8Bus;
+    cmd.params.pci_cfg.device = u8Device;
+    cmd.params.pci_cfg.function = u8Fcn;
+    cmd.params.pci_cfg.reg = u16Reg;
+    cmd.tx_len = DataLen;
+    cmd.value = DataVal;
+
+    ret = HW_peci_issue_cmd(PECI_IOC_WR_END_PT_CFG, (char*)&cmd, peci_fd);
+    *cc = cmd.cc;
+
+    peci_Close(peci_fd);
+    return ret;
+}
+
+/*-------------------------------------------------------------------------
+ *  This function provides write access to the EP local PCI configuration space
+ *------------------------------------------------------------------------*/
+EPECIStatus peci_WrEndPointPCIConfigLocal(uint8_t target, uint8_t u8Seg,
+                                          uint8_t u8Bus, uint8_t u8Device,
+                                          uint8_t u8Fcn, uint16_t u16Reg,
+                                          uint8_t DataLen, uint32_t DataVal,
+                                          uint8_t* cc)
+{
+    return peci_WrEndPointConfigCommon(target, PECI_ENDPTCFG_TYPE_LOCAL_PCI,
+                                       u8Seg, u8Bus, u8Device, u8Fcn, u16Reg,
+                                       DataLen, DataVal, cc);
+}
+
+/*-------------------------------------------------------------------------
+ *  This function provides write access to the EP local PCI configuration space
+ *------------------------------------------------------------------------*/
+EPECIStatus peci_WrEndPointPCIConfig(uint8_t target, uint8_t u8Seg,
+                                     uint8_t u8Bus, uint8_t u8Device,
+                                     uint8_t u8Fcn, uint16_t u16Reg,
+                                     uint8_t DataLen, uint32_t DataVal,
+                                     uint8_t* cc)
+{
+    return peci_WrEndPointConfigCommon(target, PECI_ENDPTCFG_TYPE_PCI, u8Seg,
+                                       u8Bus, u8Device, u8Fcn, u16Reg, DataLen,
+                                       DataVal, cc);
+}
+
+/*-------------------------------------------------------------------------
  *  This function provides crashdump discovery data over PECI
  *------------------------------------------------------------------------*/
 EPECIStatus peci_CrashDump_Discovery(uint8_t target, uint8_t subopcode,
