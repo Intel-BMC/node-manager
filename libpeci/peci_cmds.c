@@ -13,64 +13,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
+#include <ctype.h>
 #include <inttypes.h>
 #include <peci.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #ifndef ABS
 #define ABS(_v_) (((_v_) > 0) ? (_v_) : -(_v_))
 #endif
 
-enum peci_cmd_subtype
-{
-    PECI_CMD_RD_END_PT_CFG_LOCAL_PCI = PECI_CMD_MAX + 1,
-    PECI_CMD_RD_END_PT_CFG_PCI,
-    PECI_CMD_RD_END_PT_CFG_MMIO,
-    PECI_CMD_WR_END_PT_CFG_LOCAL_PCI,
-    PECI_CMD_WR_END_PT_CFG_PCI,
-};
-
 extern EPECIStatus peci_GetDIB(uint8_t target, uint64_t* dib);
 
 void Usage(char* progname)
 {
-    printf("Usage :\n");
-    printf("\t%s [-a <addr>] [-s <size>] <command> [parameters]\n", progname);
-    printf("\t\t-a  : Address of the target in decimal. Default is 48.\n");
-    printf("\t\t-s  : Size of data to read or write in bytes. Default is 4.\n");
-    printf("\t\t-n  : Ping the target.\n");
-    printf("\t\t-t  : Get the temperature.\n");
-    printf("\t\t-d  : Get the DIB.\n");
-    printf(
-        "\t\t-p  : PCI Read for specific hex address <Bus Dev Func [Reg]>.\n");
-    printf("\t\t-pw : PCI Write for specific hex address <Bus Dev Func [Reg] "
-           "Data>.\n");
-    printf("\t\t-c  : Read Package Config <Index Parameter>.\n");
-    printf("\t\t-cw : Write Package Config <Index Parameter Data>.\n");
-    printf("\t\t-m  : MSR Read <Thread Address>.\n");
-    printf("\t\t-l  : Local PCI Read for specific hex address <Bus Dev Func "
-           "[Reg]>.\n");
-    printf("\t\t-lw : Local PCI Write for specific hex address <Bus Dev Func "
-           "[Reg] Data>.\n");
-    printf(
-        "\t\t-e  : Endpoint Local PCI Config Read <Seg Bus Dev Func [Reg]>.\n");
-    printf("\t\t-ew : Endpoint Local PCI Config Write <Seg Bus Dev Func [Reg] "
-           "Data>.\n");
-    printf("\t\t-f  : Endpoint PCI Config Read <Seg Bus Dev Func [Reg]>.\n");
-    printf(
-        "\t\t-fw : Endpoint PCI Config Write <Seg Bus Dev Func [Reg] Data>.\n");
-    printf(
-        "\t\t-g  : Endpoint MMIO Read <AType Bar Seg Bus Dev Func [Reg]>.\n");
+    printf("Usage:\n");
+    printf("%s [-a <addr>] [-s <size>] <command> [parameters]\n", progname);
+    printf("Options:\n");
+    printf("\t%-6s%s\n", "-h", "Display this help information");
+    printf("\t%-6s%s\n", "-a",
+           "Address of the target in decimal. Default is 48");
+    printf("\t%-6s%s\n", "-s",
+           "Size of data to read or write in bytes. Default is 4");
+    printf("Commands:\n");
+    printf("\t%-28s%s\n", "Ping", "Ping the target");
+    printf("\t%-28s%s\n", "GetTemp", "Get the temperature");
+    printf("\t%-28s%s\n", "GetDIB", "Get the DIB");
+    printf("\t%-28s%s\n", "RdPkgConfig",
+           "Read Package Config <Index Parameter>");
+    printf("\t%-28s%s\n", "WrPkgConfig",
+           "Write Package Config <Index Parameter Data>");
+    printf("\t%-28s%s\n", "RdIAMSR", "MSR Read <Thread Address>");
+    printf("\t%-28s%s\n", "RdPCIConfig",
+           "PCI Read for specific hex address <Bus Dev Func [Reg]>");
+    printf("\t%-28s%s\n", "RdPCIConfigLocal",
+           "Local PCI Read for specific hex address <Bus Dev Func [Reg]>");
+    printf("\t%-28s%s\n", "WrPCIConfigLocal",
+           "Local PCI Write for specific hex address <Bus Dev Func Reg Data>");
+    printf("\t%-28s%s\n", "RdEndpointConfigPCILocal",
+           "Endpoint Local PCI Config Read <Seg Bus Dev Func Reg>");
+    printf("\t%-28s%s\n", "WrEndpointConfigPCILocal",
+           "Endpoint Local PCI Config Write <Seg Bus Dev Func Reg Data>");
+    printf("\t%-28s%s\n", "RdEndpointConfigPCI",
+           "Endpoint PCI Config Read <Seg Bus Dev Func Reg>");
+    printf("\t%-28s%s\n", "WrEndpointConfigPCI",
+           "Endpoint PCI Config Write <Seg Bus Dev Func Reg Data>");
+    printf("\t%-28s%s\n", "RdEndpointConfigMMIO",
+           "Endpoint MMIO Read <AType Bar Seg Bus Dev Func Reg>");
     printf("\n");
 }
 
 int main(int argc, char* argv[])
 {
     int c;
+    int i = 0;
+    char* cmd = NULL;
     EPECIStatus ret;
-    int cnt = 0;
-    uint8_t u8Cmd = PECI_CMD_MAX;
     uint8_t address = 0x30; // use default address of 48d
     uint8_t u8Size = 4;     // default to a DWORD
     uint32_t u32PciReadVal = 0;
@@ -97,7 +96,7 @@ int main(int argc, char* argv[])
     //
     // Parse arguments.
     //
-    while (-1 != (c = getopt(argc, argv, "a:s:ntdp::c::m::l::e::f::g")))
+    while (-1 != (c = getopt(argc, argv, "ha:s:")))
     {
         switch (c)
         {
@@ -106,69 +105,14 @@ int main(int argc, char* argv[])
                     address = (unsigned char)atoi(optarg);
                 break;
 
+            case 'h':
+                Usage(argv[0]);
+                return 0;
+                break;
+
             case 's':
                 if (optarg != NULL)
                     u8Size = (unsigned char)atoi(optarg);
-                break;
-
-            case 'n':
-                cnt++;
-                u8Cmd = PECI_CMD_PING;
-                break;
-
-            case 't':
-                cnt++;
-                u8Cmd = PECI_CMD_GET_TEMP;
-                break;
-
-            case 'd':
-                cnt++;
-                u8Cmd = PECI_CMD_GET_DIB;
-                break;
-
-            case 'p':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_PCI_CFG;
-                if (optarg != NULL && optarg[0] == 'w')
-                    u8Cmd = PECI_CMD_WR_PCI_CFG;
-                break;
-
-            case 'c':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_PKG_CFG;
-                if (optarg != NULL && optarg[0] == 'w')
-                    u8Cmd = PECI_CMD_WR_PKG_CFG;
-                break;
-
-            case 'm':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_IA_MSR;
-                break;
-
-            case 'l':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_PCI_CFG_LOCAL;
-                if (optarg != NULL && optarg[0] == 'w')
-                    u8Cmd = PECI_CMD_WR_PCI_CFG_LOCAL;
-                break;
-
-            case 'e':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_END_PT_CFG_LOCAL_PCI;
-                if (optarg != NULL && optarg[0] == 'w')
-                    u8Cmd = PECI_CMD_WR_END_PT_CFG_LOCAL_PCI;
-                break;
-
-            case 'f':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_END_PT_CFG_PCI;
-                if (optarg != NULL && optarg[0] == 'w')
-                    u8Cmd = PECI_CMD_WR_END_PT_CFG_PCI;
-                break;
-
-            case 'g':
-                cnt++;
-                u8Cmd = PECI_CMD_RD_END_PT_CFG_MMIO;
                 break;
 
             default:
@@ -178,385 +122,386 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (1 != cnt)
+    // Get the command from the first parameter
+    cmd = argv[optind++];
+    if (cmd == NULL)
     {
-        printf("ERROR: Invalid options.\n");
-        goto ErrorExit;
+        Usage(argv[0]);
+        return 0;
+    }
+
+    // Allow any case
+    while (cmd[i])
+    {
+        cmd[i] = tolower(cmd[i]);
+        i++;
     }
 
     //
     // Execute the command
     //
     printf("PECI target[%u]: ", address);
-    switch (u8Cmd)
+    if (strcmp(cmd, "ping") == 0)
     {
-        case PECI_CMD_PING:
-            printf("Pinging ... ");
-            (0 == peci_Ping(address)) ? printf("Succeeded\n")
-                                      : printf("Failed\n");
-            break;
-
-        case PECI_CMD_GET_TEMP:
-            printf("GetTemp\n");
-            ret = peci_GetTemp(address, &temperature);
-            if (0 != ret)
-            {
-                printf("ERROR %d: Retrieving temperature failed\n", ret);
-                break;
-            }
-            printf("   %04xh (%c%d.%02dC)\n",
-                   (int)(unsigned int)(unsigned short)temperature,
-                   (0 > temperature) ? '-' : '+',
-                   (int)((unsigned int)ABS(temperature) / 64),
-                   (int)(((unsigned int)ABS(temperature) % 64) * 100) / 64);
-            break;
-
-        case PECI_CMD_GET_DIB:
-            printf("GetDIB\n");
-            ret = peci_GetDIB(address, &dib);
-            if (0 != ret)
-            {
-                printf("ERROR %d: Retrieving DIB failed\n", ret);
-                break;
-            }
-            printf("   0x%" PRIx64 "\n", dib);
-            break;
-
-        case PECI_CMD_RD_PCI_CFG:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 4:
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                case 3:
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                case 2:
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                case 1:
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf("ERROR: Unsupported arguments for PCI Read\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("PCI Read of %02x:%02x:%02x Reg %02x\n", u8PciBus, u8PciDev,
-                   u8PciFunc, u16PciReg);
-            ret = peci_RdPCIConfig(address, u8PciBus, u8PciDev, u8PciFunc,
-                                   u16PciReg, (uint8_t*)&u32PciReadVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
-            break;
-
-        case PECI_CMD_RD_PKG_CFG:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 2:
-                    u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
-                    u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf("ERROR: Unsupported arguments for Pkg Read\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("Pkg Read of Index %02x Param %04x\n", u8PkgIndex,
-                   u16PkgParam);
-            ret = peci_RdPkgConfig(address, u8PkgIndex, u16PkgParam, u8Size,
-                                   (uint8_t*)&u32PkgValue, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PkgValue);
-            break;
-
-        case PECI_CMD_WR_PKG_CFG:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 3:
-                    u32PkgValue = strtoul(argv[--u8Index], NULL, 16);
-                    u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
-                    u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf("ERROR: Unsupported arguments for Pkg Write\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("Pkg Write of Index %02x Param %04x: 0x%0*x\n", u8PkgIndex,
-                   u16PkgParam, u8Size * 2, u32PkgValue);
-            ret = peci_WrPkgConfig(address, u8PkgIndex, u16PkgParam,
-                                   u32PkgValue, u8Size, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x\n", cc);
-            break;
-
-        case PECI_CMD_RD_IA_MSR:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 2:
-                    u16MsrAddr = strtoul(argv[--u8Index], NULL, 16);
-                    u8MsrThread = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf("ERROR: Unsupported arguments for MSR Read\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("MSR Read of Thread %02x MSR %04x\n", u8MsrThread,
-                   u16MsrAddr);
-            ret =
-                peci_RdIAMSR(address, u8MsrThread, u16MsrAddr, &u64MsrVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u64MsrVal);
-            break;
-
-        case PECI_CMD_RD_PCI_CFG_LOCAL:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 4:
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                case 3:
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                case 2:
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                case 1:
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf("ERROR: Unsupported arguments for Local PCI Read\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("Local PCI Read of %02x:%02x:%02x Reg %02x\n", u8PciBus,
-                   u8PciDev, u8PciFunc, u16PciReg);
-            ret = peci_RdPCIConfigLocal(address, u8PciBus, u8PciDev, u8PciFunc,
-                                        u16PciReg, u8Size,
-                                        (uint8_t*)&u32PciReadVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
-            break;
-
-        case PECI_CMD_WR_PCI_CFG_LOCAL:
-            u8Index = argc;
-            u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
-            switch (argc - optind)
-            {
-                case 5:
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                case 4:
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                case 3:
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                case 2:
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-                default:
-                    printf(
-                        "ERROR: Unsupported arguments for Local PCI Write\n");
-                    goto ErrorExit;
-                    break;
-            }
-            printf("Local PCI Write of %02x:%02x:%02x Reg %02x: 0x%0*x\n",
-                   u8PciBus, u8PciDev, u8PciFunc, u16PciReg, u8Size * 2,
-                   u32PciWriteVal);
-            ret = peci_WrPCIConfigLocal(address, u8PciBus, u8PciDev, u8PciFunc,
-                                        u16PciReg, u8Size, u32PciWriteVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x\n", cc);
-            break;
-
-        case PECI_CMD_RD_END_PT_CFG_LOCAL_PCI:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 5:
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-
-                default:
-                    printf("ERROR: Unsupported arguments for Endpoint Local "
-                           "PCI Read\n");
-                    goto ErrorExit;
-            }
-            printf(
-                "Endpoint Local PCI Read of Seg:%02x %02x:%02x:%02x Reg %02x\n",
-                u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg);
-            ret = peci_RdEndPointConfigPciLocal(
-                address, u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg,
-                u8Size, (uint8_t*)&u32PciReadVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
-            break;
-
-        case PECI_CMD_WR_END_PT_CFG_LOCAL_PCI:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 6:
-                    u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-
-                default:
-                    printf("ERROR: Unsupported arguments for Endpoint Local "
-                           "PCI Write\n");
-                    goto ErrorExit;
-            }
-            printf("Endpoint Local PCI Write of Seg:%02x %02x:%02x:%02x Reg "
-                   "%02x: 0x%0*x\n",
-                   u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg, u8Size * 2,
-                   u32PciWriteVal);
-            ret = peci_WrEndPointPCIConfigLocal(address, u8Seg, u8PciBus,
-                                                u8PciDev, u8PciFunc, u16PciReg,
-                                                u8Size, u32PciWriteVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x\n", cc);
-            break;
-
-        case PECI_CMD_RD_END_PT_CFG_PCI:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 5:
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-
-                default:
-                    printf(
-                        "ERROR: Unsupported arguments for Endpoint PCI Read\n");
-                    goto ErrorExit;
-            }
-            printf("Endpoint PCI Read of Seg:%02x %02x:%02x:%02x Reg %02x\n",
-                   u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg);
-            ret = peci_RdEndPointConfigPci(address, u8Seg, u8PciBus, u8PciDev,
-                                           u8PciFunc, u16PciReg, u8Size,
-                                           (uint8_t*)&u32PciReadVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
-            break;
-
-        case PECI_CMD_WR_END_PT_CFG_PCI:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 6:
-                    u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
-                    u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-
-                default:
-                    printf("ERROR: Unsupported arguments for Endpoint PCI "
-                           "Write\n");
-                    goto ErrorExit;
-            }
-            printf("Endpoint PCI Write of Seg:%02x %02x:%02x:%02x Reg %02x: "
-                   "0x%0*x\n",
-                   u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg, u8Size * 2,
-                   u32PciWriteVal);
-            ret = peci_WrEndPointPCIConfig(address, u8Seg, u8PciBus, u8PciDev,
-                                           u8PciFunc, u16PciReg, u8Size,
-                                           u32PciWriteVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x\n", cc);
-            break;
-
-        case PECI_CMD_RD_END_PT_CFG_MMIO:
-            u8Index = argc;
-            switch (argc - optind)
-            {
-                case 7:
-                    u64Offset = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                    u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                    u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                    u8Bar = strtoul(argv[--u8Index], NULL, 16);
-                    u8AddrType = strtoul(argv[--u8Index], NULL, 16);
-                    break;
-
-                default:
-                    printf("ERROR: Unsupported arguments for Endpoint MMIO "
-                           "Read\n");
-                    goto ErrorExit;
-            }
-            printf("Endpoint MMIO Read of Seg:%02x %02x:%02x:%02x AType:%02x "
-                   "Bar:%02x Offset:0x%" PRIx64 "\n",
-                   u8Seg, u8PciBus, u8PciDev, u8PciFunc, u8AddrType, u8Bar,
-                   u64Offset);
-            ret = peci_RdEndPointConfigMmio(
-                address, u8Seg, u8PciBus, u8PciDev, u8PciFunc, u8Bar,
-                u8AddrType, u64Offset, u8Size, (uint8_t*)&u32PciReadVal, &cc);
-            if (0 != ret)
-            {
-                printf("ERROR %d: command failed\n", ret);
-                break;
-            }
-            printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
-            break;
-
-        default:
-            printf("ERROR: Unrecognized command\n");
-            goto ErrorExit;
+        printf("Pinging ... ");
+        (0 == peci_Ping(address)) ? printf("Succeeded\n") : printf("Failed\n");
     }
+    else if (strcmp(cmd, "getdib") == 0)
+    {
+        printf("GetDIB\n");
+        ret = peci_GetDIB(address, &dib);
+        if (0 != ret)
+        {
+            printf("ERROR %d: Retrieving DIB failed\n", ret);
+            return 1;
+        }
+        printf("   0x%" PRIx64 "\n", dib);
+    }
+
+    else if (strcmp(cmd, "gettemp") == 0)
+    {
+        printf("GetTemp\n");
+        ret = peci_GetTemp(address, &temperature);
+        if (0 != ret)
+        {
+            printf("ERROR %d: Retrieving temperature failed\n", ret);
+            return 1;
+        }
+        printf("   %04xh (%c%d.%02dC)\n",
+               (int)(unsigned int)(unsigned short)temperature,
+               (0 > temperature) ? '-' : '+',
+               (int)((unsigned int)ABS(temperature) / 64),
+               (int)(((unsigned int)ABS(temperature) % 64) * 100) / 64);
+    }
+
+    else if (strcmp(cmd, "rdpkgconfig") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 2:
+                u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
+                u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for Pkg Read\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("Pkg Read of Index %02x Param %04x\n", u8PkgIndex, u16PkgParam);
+        ret = peci_RdPkgConfig(address, u8PkgIndex, u16PkgParam, u8Size,
+                               (uint8_t*)&u32PkgValue, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PkgValue);
+    }
+    else if (strcmp(cmd, "wrpkgconfig") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 3:
+                u32PkgValue = strtoul(argv[--u8Index], NULL, 16);
+                u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
+                u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for Pkg Write\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("Pkg Write of Index %02x Param %04x: 0x%0*x\n", u8PkgIndex,
+               u16PkgParam, u8Size * 2, u32PkgValue);
+        ret = peci_WrPkgConfig(address, u8PkgIndex, u16PkgParam, u32PkgValue,
+                               u8Size, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x\n", cc);
+    }
+    else if (strcmp(cmd, "rdiamsr") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 2:
+                u16MsrAddr = strtoul(argv[--u8Index], NULL, 16);
+                u8MsrThread = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for MSR Read\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("MSR Read of Thread %02x MSR %04x\n", u8MsrThread, u16MsrAddr);
+        ret = peci_RdIAMSR(address, u8MsrThread, u16MsrAddr, &u64MsrVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u64MsrVal);
+    }
+    else if (strcmp(cmd, "rdpciconfig") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 4:
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+            case 3:
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+            case 2:
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+            case 1:
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for PCI Read\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("PCI Read of %02x:%02x:%02x Reg %02x\n", u8PciBus, u8PciDev,
+               u8PciFunc, u16PciReg);
+        ret = peci_RdPCIConfig(address, u8PciBus, u8PciDev, u8PciFunc,
+                               u16PciReg, (uint8_t*)&u32PciReadVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "rdpciconfiglocal") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 4:
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+            case 3:
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+            case 2:
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+            case 1:
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for Local PCI Read\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("Local PCI Read of %02x:%02x:%02x Reg %02x\n", u8PciBus,
+               u8PciDev, u8PciFunc, u16PciReg);
+        ret = peci_RdPCIConfigLocal(address, u8PciBus, u8PciDev, u8PciFunc,
+                                    u16PciReg, u8Size, (uint8_t*)&u32PciReadVal,
+                                    &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "wrpciconfiglocal") == 0)
+    {
+        u8Index = argc;
+        u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
+        switch (argc - optind)
+        {
+            case 5:
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+            case 4:
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+            case 3:
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+            case 2:
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                break;
+            default:
+                printf("ERROR: Unsupported arguments for Local PCI Write\n");
+                goto ErrorExit;
+                break;
+        }
+        printf("Local PCI Write of %02x:%02x:%02x Reg %02x: 0x%0*x\n", u8PciBus,
+               u8PciDev, u8PciFunc, u16PciReg, u8Size * 2, u32PciWriteVal);
+        ret = peci_WrPCIConfigLocal(address, u8PciBus, u8PciDev, u8PciFunc,
+                                    u16PciReg, u8Size, u32PciWriteVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x\n", cc);
+    }
+    else if (strcmp(cmd, "rdendpointconfigpcilocal") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 5:
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                break;
+
+            default:
+                printf("ERROR: Unsupported arguments for Endpoint Local PCI "
+                       "Read\n");
+                goto ErrorExit;
+        }
+        printf("Endpoint Local PCI Read of Seg:%02x %02x:%02x:%02x Reg %02x\n",
+               u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg);
+        ret = peci_RdEndPointConfigPciLocal(address, u8Seg, u8PciBus, u8PciDev,
+                                            u8PciFunc, u16PciReg, u8Size,
+                                            (uint8_t*)&u32PciReadVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "wrendpointconfigpcilocal") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 6:
+                u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                break;
+
+            default:
+                printf("ERROR: Unsupported arguments for Endpoint Local PCI "
+                       "Write\n");
+                goto ErrorExit;
+        }
+        printf("Endpoint Local PCI Write of Seg:%02x %02x:%02x:%02x Reg %02x: "
+               "0x%0*x\n",
+               u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg, u8Size * 2,
+               u32PciWriteVal);
+        ret = peci_WrEndPointPCIConfigLocal(address, u8Seg, u8PciBus, u8PciDev,
+                                            u8PciFunc, u16PciReg, u8Size,
+                                            u32PciWriteVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x\n", cc);
+    }
+    else if (strcmp(cmd, "rdendpointconfigpci") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 5:
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                break;
+
+            default:
+                printf("ERROR: Unsupported arguments for Endpoint PCI Read\n");
+                goto ErrorExit;
+        }
+        printf("Endpoint PCI Read of Seg:%02x %02x:%02x:%02x Reg %02x\n", u8Seg,
+               u8PciBus, u8PciDev, u8PciFunc, u16PciReg);
+        ret = peci_RdEndPointConfigPci(address, u8Seg, u8PciBus, u8PciDev,
+                                       u8PciFunc, u16PciReg, u8Size,
+                                       (uint8_t*)&u32PciReadVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "wrendpointconfigpci") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 6:
+                u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                break;
+
+            default:
+                printf("ERROR: Unsupported arguments for Endpoint PCI Write\n");
+                goto ErrorExit;
+        }
+        printf(
+            "Endpoint PCI Write of Seg:%02x %02x:%02x:%02x Reg %02x: 0x%0*x\n",
+            u8Seg, u8PciBus, u8PciDev, u8PciFunc, u16PciReg, u8Size * 2,
+            u32PciWriteVal);
+        ret = peci_WrEndPointPCIConfig(address, u8Seg, u8PciBus, u8PciDev,
+                                       u8PciFunc, u16PciReg, u8Size,
+                                       u32PciWriteVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x\n", cc);
+    }
+    else if (strcmp(cmd, "rdendpointconfigmmio") == 0)
+    {
+        u8Index = argc;
+        switch (argc - optind)
+        {
+            case 7:
+                u64Offset = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                u8Bar = strtoul(argv[--u8Index], NULL, 16);
+                u8AddrType = strtoul(argv[--u8Index], NULL, 16);
+                break;
+
+            default:
+                printf("ERROR: Unsupported arguments for Endpoint MMIO Read\n");
+                goto ErrorExit;
+        }
+        printf("Endpoint MMIO Read of Seg:%02x %02x:%02x:%02x AType:%02x "
+               "Bar:%02x Offset:0x%" PRIx64 "\n",
+               u8Seg, u8PciBus, u8PciDev, u8PciFunc, u8AddrType, u8Bar,
+               u64Offset);
+        ret = peci_RdEndPointConfigMmio(address, u8Seg, u8PciBus, u8PciDev,
+                                        u8PciFunc, u8Bar, u8AddrType, u64Offset,
+                                        u8Size, (uint8_t*)&u32PciReadVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            return 1;
+        }
+        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else
+    {
+        printf("ERROR: Unrecognized command\n");
+        goto ErrorExit;
+    }
+
     return 0;
 
 ErrorExit:
