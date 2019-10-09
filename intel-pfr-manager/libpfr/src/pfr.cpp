@@ -54,11 +54,11 @@ static constexpr uint8_t bmcRecoveryMinorVersion = 0x1F;
 static constexpr uint8_t ufmLockedMask = (0x1 << 0x04);
 static constexpr uint8_t ufmProvisionedMask = (0x1 << 0x05);
 
-template <typename T> std::string int_to_hexstring(T i)
+std::string toHexString(const uint8_t val)
 {
     std::stringstream stream;
-    stream << std::setfill('0') << std::setw(sizeof(T) * 2) << std::hex
-           << static_cast<int>(i);
+    stream << std::setfill('0') << std::setw(2) << std::hex
+           << static_cast<int>(val);
     return stream.str();
 }
 
@@ -110,7 +110,7 @@ std::string getVersionInfoCPLD(ImageType& imgType)
         uint8_t majorVer = cpldDev.i2cReadByteData(majorReg);
         uint8_t minorVer = cpldDev.i2cReadByteData(minorReg);
         std::string version =
-            int_to_hexstring(majorVer) + "." + int_to_hexstring(minorVer);
+            toHexString(majorVer) + "." + toHexString(minorVer);
         return version;
     }
     catch (const std::exception& e)
@@ -141,7 +141,7 @@ int getProvisioningStatus(bool& ufmLocked, bool& ufmProvisioned)
     }
 }
 
-int readCpldReg(const ActionType& action, uint8_t value)
+int readCpldReg(const ActionType& action, uint8_t& value)
 {
     uint8_t cpldReg;
 

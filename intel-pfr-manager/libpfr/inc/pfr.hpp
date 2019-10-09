@@ -41,9 +41,10 @@ enum class ActionType
     minorError
 };
 
+std::string toHexString(const uint8_t val);
 std::string getVersionInfoCPLD(ImageType &imgType);
 int getProvisioningStatus(bool &ufmLocked, bool &ufmProvisioned);
-int readCpldReg(const ActionType &action, uint8_t value);
+int readCpldReg(const ActionType &action, uint8_t &value);
 int setBMCBootCheckpoint(const uint8_t checkPoint);
 
 } // namespace pfr

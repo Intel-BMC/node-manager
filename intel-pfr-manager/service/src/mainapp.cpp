@@ -56,33 +56,32 @@ static std::vector<std::tuple<std::string, ImageType, std::string>>
 static std::map<uint8_t, std::string> recoveryReasonMap = {
     {0x01, "PCH active authentication failure"},
     {0x02, "PCH recovery authentication failure"},
-    {0x03, "ACM launch failure"},
-    {0x04, "IBB launch failure"},
-    {0x05, "OBB launch failure"},
-    {0x06, "BMC active authentication failure"},
-    {0x07, "BMC recovery authentication failure"},
-    {0x08, "BMC launch failure"},
-    {0x09, "CPLD watchdog expired"}};
+    {0x03, "ME launch failure"},
+    {0x04, "ACM launch failure"},
+    {0x05, "IBB launch failure"},
+    {0x06, "OBB launch failure"},
+    {0x07, "BMC active authentication failure"},
+    {0x08, "BMC recovery authentication failure"},
+    {0x09, "BMC launch failure"},
+    {0x0A, "CPLD watchdog expired"}};
 
 // Panic Reason map. { <CPLD association>, <Panic reason> }
 static std::map<uint8_t, std::string> panicReasonMap = {
-    {0x01, "CPLD WDT expired"},
-    {0x02, "BMC WDT expired"},
-    {0x03, "ME WDT expired"},
-    {0x04, "ACM WDT expired"},
-    {0x05, "IBB WDT expired"},
-    {0x06, "OBB WDT expired"},
+    {0x01, "CPLD watchdog expired"},
+    {0x02, "BMC watchdog expired"},
+    {0x03, "ME watchdog expired"},
+    {0x04, "ACM watchdog expired"},
+    {0x05, "IBB watchdog expired"},
+    {0x06, "OBB watchdog expired"},
     {0x07, "BMC active authentication failure"},
     {0x08, "BMC recovery authentication failure"},
     {0x09, "PCH active authentication failure"},
     {0x0A, "PCH recovery authentication failure"},
-    {0x0B, "IBB authentication failure"},
-    {0x0C, "OBB authentication failure"},
-    {0x0D, "BMC authentication failure"},
-    {0x0E, "PCH active update intent"},
-    {0x0F, "BMC active update intent"},
-    {0x10, "PCH recovery update intent"},
-    {0x11, "BMC recovery update intent"}};
+    {0x0B, "ME authentication failure"},
+    {0x0C, "ACM or IBB or OBB authentication failure"},
+    {0x0D, "PCH update intent"},
+    {0x0E, "BMC update intent"},
+    {0x0F, "BMC reset detected"}};
 
 static void updateDbusPropertiesCache()
 {
@@ -115,10 +114,10 @@ static void logLastRecoveryEvent()
         return;
     }
 
-    sd_journal_send("MESSAGE=%s", "Platform firmware recovered.", "PRIORITY=%i",
-                    LOG_ERR, "REDFISH_MESSAGE_ID=%s",
-                    "OpenBMC.0.1.PlatformFWRecovered",
-                    "REDFISH_MESSAGE_ARGS=%s", it->second.c_str(), NULL);
+    sd_journal_send(
+        "MESSAGE=%s", "Platform firmware recovered.", "PRIORITY=%i", LOG_ERR,
+        "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PlatformFirmwareEvent",
+        "REDFISH_MESSAGE_ARGS=%s,%s", "recovery", it->second.c_str(), NULL);
 }
 
 static void logLastPanicEvent()
@@ -138,10 +137,10 @@ static void logLastPanicEvent()
         return;
     }
 
-    sd_journal_send("MESSAGE=%s", "Platform panic event triggered.",
-                    "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
-                    "OpenBMC.0.1.PlatformFWPanicTriggered",
-                    "REDFISH_MESSAGE_ARGS=%s", it->second.c_str(), NULL);
+    sd_journal_send(
+        "MESSAGE=%s", "Platform panic event triggered.", "PRIORITY=%i", LOG_ERR,
+        "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PlatformFirmwareEvent",
+        "REDFISH_MESSAGE_ARGS=%s,%s", "panic", it->second.c_str(), NULL);
 }
 
 static void checkAndLogEvents()
@@ -184,11 +183,13 @@ static void checkAndLogEvents()
 
             if (majorErr || minorErr)
             {
-                sd_journal_send(
-                    "MESSAGE=%s", "Error occurred on platform firmware.",
-                    "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
-                    "OpenBMC.0.1.PlatformFWErrorOccurred",
-                    "REDFISH_MESSAGE_ARGS=%i,%i", majorErr, minorErr, NULL);
+                std::string errorStr =
+                    toHexString(majorErr) + "." + toHexString(minorErr);
+                sd_journal_send("MESSAGE=%s",
+                                "Error occurred on platform firmware.",
+                                "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
+                                "OpenBMC.0.1.PlatformFirmwareError",
+                                "REDFISH_MESSAGE_ARGS=%s", errorStr, NULL);
             }
         }
     }
