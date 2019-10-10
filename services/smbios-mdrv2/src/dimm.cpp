@@ -169,13 +169,13 @@ void Dimm::dimmManufacturer(const uint8_t positionNum, const uint8_t structLen,
 {
     std::string result = positionToString(positionNum, structLen, dataIn);
 
-    memoryManufacturer(result);
+    manufacturer(result);
 }
 
-std::string Dimm::memoryManufacturer(std::string value)
+std::string Dimm::manufacturer(std::string value)
 {
-    return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
-        memoryManufacturer(value);
+    return sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::
+        Asset::manufacturer(value);
 }
 
 void Dimm::dimmSerialNum(const uint8_t positionNum, const uint8_t structLen,
@@ -183,13 +183,13 @@ void Dimm::dimmSerialNum(const uint8_t positionNum, const uint8_t structLen,
 {
     std::string result = positionToString(positionNum, structLen, dataIn);
 
-    memorySerialNum(result);
+    serialNumber(result);
 }
 
-std::string Dimm::memorySerialNum(std::string value)
+std::string Dimm::serialNumber(std::string value)
 {
-    return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
-        memorySerialNum(value);
+    return sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::
+        Asset::serialNumber(value);
 }
 
 void Dimm::dimmPartNum(const uint8_t positionNum, const uint8_t structLen,
@@ -197,13 +197,13 @@ void Dimm::dimmPartNum(const uint8_t positionNum, const uint8_t structLen,
 {
     std::string result = positionToString(positionNum, structLen, dataIn);
 
-    memoryPartNum(result);
+    partNumber(result);
 }
 
-std::string Dimm::memoryPartNum(std::string value)
+std::string Dimm::partNumber(std::string value)
 {
-    return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
-        memoryPartNum(value);
+    return sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::
+        Asset::partNumber(value);
 }
 
 uint8_t Dimm::memoryAttributes(uint8_t value)
