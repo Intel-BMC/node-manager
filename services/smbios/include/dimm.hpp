@@ -15,6 +15,7 @@
 */
 
 #pragma once
+#include <xyz/openbmc_project/Inventory/Decorator/Asset/server.hpp>
 #include <xyz/openbmc_project/Inventory/Item/Dimm/server.hpp>
 #include "smbios.hpp"
 
@@ -24,8 +25,12 @@ namespace phosphor
 namespace smbios
 {
 
-class Dimm : sdbusplus::server::object::object<
-                 sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm>
+class Dimm
+    : sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm>,
+      sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::Asset>
+
 {
   public:
     Dimm() = delete;
@@ -41,6 +46,9 @@ class Dimm : sdbusplus::server::object::object<
         sdbusplus::server::object::object<
             sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm>(
             bus, objPath.c_str()),
+        sdbusplus::server::object::object<
+            sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::
+                Asset>(bus, objPath.c_str()),
         dimmNum(dimmId), regionS(region)
     {
         memoryInfoUpdate();
@@ -54,9 +62,9 @@ class Dimm : sdbusplus::server::object::object<
     std::string memoryType(std::string value) override;
     std::string memoryTypeDetail(std::string value) override;
     uint16_t memorySpeed(uint16_t value) override;
-    std::string memoryManufacturer(std::string value) override;
-    std::string memorySerialNum(std::string value) override;
-    std::string memoryPartNum(std::string value) override;
+    std::string manufacturer(std::string value) override;
+    std::string serialNumber(std::string value) override;
+    std::string partNumber(std::string value) override;
     uint8_t memoryAttributes(uint8_t value) override;
     uint16_t memoryConfClockSpeed(uint16_t value) override;
 

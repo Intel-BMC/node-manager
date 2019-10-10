@@ -64,6 +64,7 @@ int main(void)
     sd_event_default(&events);
 
     sdbusplus::bus::bus bus = sdbusplus::bus::new_default();
+    sdbusplus::server::manager::manager objManager(bus, "/xyz/openbmc_project");
     phosphor::watchdog::EventPtr eventP{events,
                                         phosphor::watchdog::EventDeleter()};
     bus.attach_event(events, SD_EVENT_PRIORITY_NORMAL);
