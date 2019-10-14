@@ -35,9 +35,11 @@ void Usage(char* progname)
     printf("\t%-6s%s\n", "-v",
            "Display additional information about the command");
     printf("\t%-6s%s\n", "-a",
-           "Address of the target in decimal. Default is 48");
+           "Address of the target. Accepted values are 48-55 (0x30-0x37). "
+           "Default is 48 (0x30)");
     printf("\t%-6s%s\n", "-s",
-           "Size of data to read or write in bytes. Default is 4");
+           "Size of data to read or write in bytes. Accepted values are 1, 2, "
+           "4, 8, and 16. Default is 4");
     printf("Commands:\n");
     printf("\t%-28s%s\n", "Ping", "Ping the target");
     printf("\t%-28s%s\n", "GetTemp", "Get the temperature");
@@ -114,16 +116,28 @@ int main(int argc, char* argv[])
 
             case 'a':
                 if (optarg != NULL)
-                    address = (unsigned char)atoi(optarg);
+                    address = strtoul(optarg, NULL, 0);
+                if (address < MIN_CLIENT_ADDR || address > MAX_CLIENT_ADDR)
+                {
+                    printf("ERROR: Invalid address \"0x%x\"\n", address);
+                    goto ErrorExit;
+                }
+
                 break;
 
             case 's':
                 if (optarg != NULL)
-                    u8Size = (unsigned char)atoi(optarg);
+                    u8Size = strtoul(optarg, NULL, 0);
+                if (u8Size != 1 && u8Size != 2 && u8Size != 4 && u8Size != 8 &&
+                    u8Size != 16)
+                {
+                    printf("ERROR: Invalid size \"%d\"\n", u8Size);
+                    goto ErrorExit;
+                }
                 break;
 
             default:
-                printf("ERROR: Unrecognized option \"-%c\".\n", optopt);
+                printf("ERROR: Unrecognized option \"-%c\"\n", optopt);
                 goto ErrorExit;
                 break;
         }
@@ -149,7 +163,7 @@ int main(int argc, char* argv[])
     //
     if (verbose)
     {
-        printf("PECI target[%u]: ", address);
+        printf("PECI target[0x%x]: ", address);
     }
     if (strcmp(cmd, "ping") == 0)
     {
