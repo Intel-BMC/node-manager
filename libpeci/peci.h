@@ -17,9 +17,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <inttypes.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcpp"
+#pragma GCC diagnostic ignored "-Wvariadic-macros"
 #include <linux/peci-ioctl.h>
+#pragma GCC diagnostic pop
+#include <inttypes.h>
 #include <stdbool.h>
 
 // PECI Client Address List
@@ -226,7 +229,7 @@ EPECIStatus peci_raw(uint8_t target, uint8_t u8ReadLen, const uint8_t* pRawCmd,
                      const uint32_t cmdSize, uint8_t* pRawResp,
                      uint32_t respSize);
 
-EPECIStatus peci_Lock(int* peci_fd, uint32_t timeout_ms);
+EPECIStatus peci_Lock(int* peci_fd, int timeout_ms);
 void peci_Unlock(int peci_fd);
 EPECIStatus peci_Ping(uint8_t target);
 EPECIStatus peci_Ping_seq(uint8_t target, int peci_fd);

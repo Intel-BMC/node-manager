@@ -39,12 +39,12 @@ void peci_Unlock(int peci_fd)
  * This function attempts to lock the peci interface with the specified
  * timeout and returns a file descriptor if successful.
  *------------------------------------------------------------------------*/
-EPECIStatus peci_Lock(int* peci_fd, uint32_t timeout_ms)
+EPECIStatus peci_Lock(int* peci_fd, int timeout_ms)
 {
     struct timespec sRequest;
     sRequest.tv_sec = 0;
     sRequest.tv_nsec = PECI_TIMEOUT_RESOLUTION_MS * 1000 * 1000;
-    uint32_t timeout_count = 0;
+    int timeout_count = 0;
 
     if (NULL == peci_fd)
     {
@@ -73,8 +73,7 @@ EPECIStatus peci_Lock(int* peci_fd, uint32_t timeout_ms)
     }
     if (-1 == *peci_fd)
     {
-        syslog(LOG_ERR, "%s(%d): >>> PECI Device Busy <<< \n", __FUNCTION__,
-               __LINE__);
+        syslog(LOG_ERR, " >>> PECI Device Busy <<< \n");
         return PECI_CC_DRIVER_ERR;
     }
     return PECI_CC_SUCCESS;
@@ -1116,7 +1115,7 @@ EPECIStatus peci_raw(uint8_t target, uint8_t u8ReadLen, const uint8_t* pRawCmd,
     }
 
     cmd.addr = target;
-    cmd.tx_len = cmdSize;
+    cmd.tx_len = (uint8_t)cmdSize;
     cmd.rx_len = u8ReadLen;
 
     memcpy(u8TxBuf, pRawCmd, cmdSize);

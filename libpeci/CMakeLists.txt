@@ -7,6 +7,26 @@ set_property(TARGET peci PROPERTY C_STANDARD 99)
 target_include_directories(peci PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 set_target_properties(peci PROPERTIES VERSION "1.0" SOVERSION "1")
 
+set(
+  CMAKE_C_FLAGS
+  "${CMAKE_C_FLAGS} \
+-Wall \
+-Wextra \
+-Wcast-align \
+-Wunused \
+-Wconversion \
+-Wsign-conversion \
+-Wnull-dereference \
+-Wdouble-promotion \
+-Wformat=2 \
+-Wno-unused-parameter \
+-Werror \
+-Wduplicated-cond \
+-Wduplicated-branches \
+-Wlogical-op \
+"
+  )
+
 install(TARGETS peci DESTINATION lib)
 install(FILES peci.h DESTINATION include)
 

@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
     uint64_t u64MsrVal = 0;
     short temperature;
     uint64_t dib;
-    uint8_t u8Index = 0;
+    int index = 0;
     uint8_t cc = 0;
     bool verbose = false;
 
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 
             case 'a':
                 if (optarg != NULL)
-                    address = strtoul(optarg, NULL, 0);
+                    address = (uint8_t)strtoul(optarg, NULL, 0);
                 if (address < MIN_CLIENT_ADDR || address > MAX_CLIENT_ADDR)
                 {
                     printf("ERROR: Invalid address \"0x%x\"\n", address);
@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
 
             case 's':
                 if (optarg != NULL)
-                    u8Size = strtoul(optarg, NULL, 0);
+                    u8Size = (uint8_t)strtoul(optarg, NULL, 0);
                 if (u8Size != 1 && u8Size != 2 && u8Size != 4 && u8Size != 8 &&
                     u8Size != 16)
                 {
@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
     // Allow any case
     while (cmd[i])
     {
-        cmd[i] = tolower(cmd[i]);
+        cmd[i] = (char)tolower((int)cmd[i]);
         i++;
     }
 
@@ -209,12 +209,12 @@ int main(int argc, char* argv[])
 
     else if (strcmp(cmd, "rdpkgconfig") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 2:
-                u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
-                u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
+                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Pkg Read\n");
@@ -237,13 +237,13 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "wrpkgconfig") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 3:
-                u32PkgValue = strtoul(argv[--u8Index], NULL, 16);
-                u16PkgParam = strtoul(argv[--u8Index], NULL, 16);
-                u8PkgIndex = strtoul(argv[--u8Index], NULL, 16);
+                u32PkgValue = strtoul(argv[--index], NULL, 16);
+                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Pkg Write\n");
@@ -266,12 +266,12 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "rdiamsr") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 2:
-                u16MsrAddr = strtoul(argv[--u8Index], NULL, 16);
-                u8MsrThread = strtoul(argv[--u8Index], NULL, 16);
+                u16MsrAddr = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8MsrThread = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for MSR Read\n");
@@ -289,21 +289,24 @@ int main(int argc, char* argv[])
             printf("ERROR %d: command failed\n", ret);
             return 1;
         }
-        printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u64MsrVal);
+        printf("   cc:0x%02x 0x%0*llx\n", cc, u8Size * 2, u64MsrVal);
     }
     else if (strcmp(cmd, "rdpciconfig") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 4:
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 3:
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 2:
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 1:
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for PCI Read\n");
@@ -326,17 +329,20 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "rdpciconfiglocal") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 4:
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 3:
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 2:
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 1:
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Local PCI Read\n");
@@ -360,18 +366,21 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "wrpciconfiglocal") == 0)
     {
-        u8Index = argc;
-        u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
+        index = argc;
+        u32PciWriteVal = strtoul(argv[--index], NULL, 16);
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 4:
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 3:
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                /* FALLTHROUGH */
             case 2:
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Local PCI Write\n");
@@ -395,15 +404,15 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "rdendpointconfigpcilocal") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
 
             default:
@@ -429,16 +438,16 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "wrendpointconfigpcilocal") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 6:
-                u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                u32PciWriteVal = strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
 
             default:
@@ -465,15 +474,15 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "rdendpointconfigpci") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
 
             default:
@@ -497,16 +506,16 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "wrendpointconfigpci") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 6:
-                u32PciWriteVal = strtoul(argv[--u8Index], NULL, 16);
-                u16PciReg = strtoul(argv[--u8Index], NULL, 16);
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                u8Seg = strtoul(argv[--u8Index], NULL, 16);
+                u32PciWriteVal = strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
 
             default:
@@ -532,17 +541,17 @@ int main(int argc, char* argv[])
     }
     else if (strcmp(cmd, "rdendpointconfigmmio") == 0)
     {
-        u8Index = argc;
+        index = argc;
         switch (argc - optind)
         {
             case 7:
-                u64Offset = strtoul(argv[--u8Index], NULL, 16);
-                u8PciFunc = strtoul(argv[--u8Index], NULL, 16);
-                u8PciDev = strtoul(argv[--u8Index], NULL, 16);
-                u8PciBus = strtoul(argv[--u8Index], NULL, 16);
-                u8Seg = strtoul(argv[--u8Index], NULL, 16);
-                u8Bar = strtoul(argv[--u8Index], NULL, 16);
-                u8AddrType = strtoul(argv[--u8Index], NULL, 16);
+                u64Offset = strtoull(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8Bar = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8AddrType = (uint8_t)strtoul(argv[--index], NULL, 16);
                 break;
 
             default:
