@@ -17,7 +17,10 @@
 #pragma once
 #include "smbios_mdrv2.hpp"
 
+#include <xyz/openbmc_project/Inventory/Decorator/Asset/server.hpp>
 #include <xyz/openbmc_project/Inventory/Item/Cpu/server.hpp>
+#include <xyz/openbmc_project/Inventory/Item/server.hpp>
+#include <xyz/openbmc_project/State/Decorator/OperationalStatus/server.hpp>
 
 namespace phosphor
 {
@@ -86,8 +89,16 @@ static const std::array<std::string, 16> characteristicsTable{
     "Reserved",
     "Reserved"};
 
-class Cpu : sdbusplus::server::object::object<
-                sdbusplus::xyz::openbmc_project::Inventory::Item::server::Cpu>
+class Cpu
+    : sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::Inventory::Item::server::Cpu>,
+      sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::Inventory::server::Item>,
+      sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::Asset>,
+      sdbusplus::server::object::object<
+          sdbusplus::xyz::openbmc_project::State::Decorator::server::
+              OperationalStatus>
 {
   public:
     Cpu() = delete;
@@ -102,6 +113,15 @@ class Cpu : sdbusplus::server::object::object<
         sdbusplus::server::object::object<
             sdbusplus::xyz::openbmc_project::Inventory::Item::server::Cpu>(
             bus, objPath.c_str()),
+        sdbusplus::server::object::object<
+            sdbusplus::xyz::openbmc_project::Inventory::Decorator::server::
+                Asset>(bus, objPath.c_str()),
+        sdbusplus::server::object::object<
+            sdbusplus::xyz::openbmc_project::Inventory::server::Item>(
+            bus, objPath.c_str()),
+        sdbusplus::server::object::object<
+            sdbusplus::xyz::openbmc_project::State::Decorator::server::
+                OperationalStatus>(bus, objPath.c_str()),
         cpuNum(cpuId), storage(smbiosTableStorage)
     {
         processorInfoUpdate();
@@ -112,13 +132,15 @@ class Cpu : sdbusplus::server::object::object<
     std::string processorSocket(std::string value) override;
     std::string processorType(std::string value) override;
     std::string processorFamily(std::string value) override;
-    std::string processorManufacturer(std::string value) override;
+    std::string manufacturer(std::string value) override;
     uint32_t processorId(uint32_t value) override;
     std::string processorVersion(std::string value) override;
     uint16_t processorMaxSpeed(uint16_t value) override;
     std::string processorCharacteristics(std::string value) override;
     uint16_t processorCoreCount(uint16_t value) override;
     uint16_t processorThreadCount(uint16_t value) override;
+    bool present(bool value) override;
+    bool functional(bool value) override;
 
   private:
     uint8_t cpuNum;
@@ -167,6 +189,7 @@ class Cpu : sdbusplus::server::object::object<
     void cpuVersion(const uint8_t positionNum, const uint8_t structLen,
                     uint8_t *dataIn);
     void cpuCharacteristics(const uint16_t value);
+    void cpuStatus(const uint8_t value);
 };
 
 } // namespace smbios

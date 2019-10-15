@@ -40,6 +40,7 @@ std::string System::uUID(std::string value)
         stream << std::setw(4) << systemInfo->uUID.timeMid;
         stream << "-";
         stream << std::setw(4) << systemInfo->uUID.timeHiAndVer;
+        stream << "-";
         stream << std::setw(2) << static_cast<int>(systemInfo->uUID.clockSeqHi);
         stream << std::setw(2)
                << static_cast<int>(systemInfo->uUID.clockSeqLow);
