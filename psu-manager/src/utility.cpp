@@ -83,6 +83,62 @@ int i2cSet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, uint8_t value)
     return 0;
 }
 
+int setPingFd(int& fd, uint64_t bus)
+{
+    if (fd > 0)
+    {
+        ::close(fd);
+    }
+    std::string pingPath = "/dev/i2c-" + std::to_string(bus);
+    fd = ::open(pingPath.c_str(), O_RDWR | O_CLOEXEC);
+    if (fd < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error in open!",
+            phosphor::logging::entry("PATH=%s", pingPath.c_str()));
+        return -1;
+    }
+
+    unsigned long funcs = 0;
+    if (::ioctl(fd, I2C_FUNCS, &funcs) < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error in I2C_FUNCS!",
+            phosphor::logging::entry("PATH=%s", pingPath.c_str()));
+        ::close(fd);
+        return -1;
+    }
+
+    if (!(funcs & I2C_FUNC_SMBUS_READ_BYTE))
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "i2c bus does not support read!",
+            phosphor::logging::entry("PATH=%s", pingPath.c_str()));
+        ::close(fd);
+        return -1;
+    }
+    return 0;
+}
+
+int i2cPing(int fd, uint8_t slaveAddr)
+{
+    if (::ioctl(fd, I2C_SLAVE_FORCE, slaveAddr) < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Error in I2C_SLAVE_FORCE!",
+            phosphor::logging::entry("SLAVEADDR=0x%x", slaveAddr));
+        ::close(fd);
+        return -1;
+    }
+
+    if (::i2c_smbus_read_byte(fd) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, int& value)
 {
     unsigned long funcs = 0;
@@ -138,7 +194,6 @@ int i2cGet(uint8_t bus, uint8_t slaveAddr, uint8_t regAddr, int& value)
         ::close(fd);
         return -1;
     }
-
     ::close(fd);
     return 0;
 }

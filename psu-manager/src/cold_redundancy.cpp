@@ -42,8 +42,8 @@ static const constexpr char* coldRedundancyPath =
     "/xyz/openbmc_project/control/power_supply_redundancy";
 
 static std::vector<std::unique_ptr<PowerSupply>> powerSupplies;
-static uint8_t pmbusNum = 7;
 static std::vector<uint64_t> addrTable = {0x50, 0x51};
+static int pingFd = -1;
 
 ColdRedundancy::ColdRedundancy(
     boost::asio::io_service& io, sdbusplus::asio::object_server& objectServer,
@@ -256,7 +256,7 @@ static const constexpr uint8_t fruOffsetZero = 0x00;
 int pingPSU(const uint8_t& addr)
 {
     int fruData = 0;
-    return i2cGet(pmbusNum, addr, fruOffsetZero, fruData);
+    return i2cPing(pingFd, addr);
 }
 
 void rescanPSUEntityManager(
@@ -427,8 +427,11 @@ void ColdRedundancy::createPSU(
                                                      "entry in configuration\n";
                                         return;
                                     }
-                                    pmbusNum = static_cast<uint8_t>(*psuBus);
                                     addrTable = *psuAddress;
+                                    if (setPingFd(pingFd, *psuBus))
+                                    {
+                                        return;
+                                    }
                                     keepAliveCheck();
                                     return;
                                 }
