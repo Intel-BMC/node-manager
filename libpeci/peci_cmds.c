@@ -65,6 +65,7 @@ void Usage(char* progname)
            "Endpoint PCI Config Write <Seg Bus Dev Func Reg Data>");
     printf("\t%-28s%s\n", "RdEndpointConfigMMIO",
            "Endpoint MMIO Read <AType Bar Seg Bus Dev Func Reg>");
+    printf("\t%-28s%s\n", "raw", "Raw PECI command in hex bytes");
     printf("\n");
 }
 
@@ -574,6 +575,76 @@ int main(int argc, char* argv[])
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "raw") == 0)
+    {
+        if ((argc - optind) < 3)
+        {
+            printf("ERROR: Unsupported arguments for raw command\n");
+            goto ErrorExit;
+        }
+
+        // Address is provided in the first byte of the PECI command
+        uint8_t rawAddr = (uint8_t)strtoul(argv[optind++], NULL, 16);
+        // Write length is provided in the second byte of the PECI command
+        uint8_t writeLength = (uint8_t)strtoul(argv[optind++], NULL, 16);
+        // Read length is provided in the third byte of the PECI command
+        uint8_t readLength = (uint8_t)strtoul(argv[optind++], NULL, 16);
+
+        // remaining parameters should match write length
+        if ((argc - optind) != writeLength)
+        {
+            printf("ERROR: Incorrect write length for raw command\n");
+            goto ErrorExit;
+        }
+        uint8_t* rawCmd = (uint8_t*)calloc(writeLength, sizeof(uint8_t));
+        if (rawCmd == NULL)
+        {
+            // calloc failed, abort the sequence
+            printf("Raw command memory allocation failed\n");
+            return 1;
+        }
+        for (i = 0; i < writeLength; i++)
+        {
+            rawCmd[i] = (uint8_t)strtoul(argv[i + optind], NULL, 16);
+        }
+        if (verbose)
+        {
+            printf("Raw command: %02x %02x %02x ", rawAddr, writeLength,
+                   readLength);
+            for (i = 0; i < writeLength; i++)
+            {
+                printf("0x%02x ", rawCmd[i]);
+            }
+            printf("\n");
+        }
+
+        uint8_t* rawResp = (uint8_t*)calloc(readLength, sizeof(uint8_t));
+        if (rawResp == NULL)
+        {
+            // calloc failed, abort the sequence
+            printf("Raw command memory allocation failed\n");
+            free(rawCmd);
+            return 1;
+        }
+        ret = peci_raw(rawAddr, readLength, rawCmd, writeLength, rawResp,
+                       readLength);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            free(rawCmd);
+            free(rawResp);
+            return 1;
+        }
+        printf("   ");
+        for (i = 0; i < readLength; i++)
+        {
+            printf("0x%02x ", rawResp[i]);
+        }
+        printf("\n");
+
+        free(rawCmd);
+        free(rawResp);
     }
     else
     {
