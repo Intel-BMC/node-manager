@@ -37,6 +37,7 @@ typedef enum
     clx2 = 0x00050657,
     cpx = 0x0005065A,
     icx = 0x000606A0,
+    icx2 = 0x000606A4,
 } CPUModel;
 
 // PECI Status Codes
