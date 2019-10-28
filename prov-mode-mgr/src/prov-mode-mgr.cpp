@@ -74,11 +74,40 @@ void ProvModeMgr::updateProvModeProperty(
         std::to_string(static_cast<uint8_t>(mode)));
 }
 
+void ProvModeMgr::logEvent(sdbusplus::xyz::openbmc_project::Control::Security::
+                               server::RestrictionMode::Modes mode)
+{
+    namespace secCtrl =
+        sdbusplus::xyz::openbmc_project::Control::Security::server;
+
+    if (mode == secCtrl::RestrictionMode::Modes::Provisioning)
+    {
+        sd_journal_send("MESSAGE=%s", "RestrictionMode - Provisioning state",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.SystemInterfaceUnprovisioned", NULL);
+    }
+    else if (mode == secCtrl::RestrictionMode::Modes::ProvisionedHostWhitelist)
+    {
+        sd_journal_send("MESSAGE=%s", "RestrictionMode - Whitelist state",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.SystemInterfaceWhitelistProvisioned",
+                        NULL);
+    }
+    else if (mode == secCtrl::RestrictionMode::Modes::ProvisionedHostDisabled)
+    {
+        sd_journal_send("MESSAGE=%s", "RestrictionMode - Disabled state",
+                        "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
+                        "OpenBMC.0.1.SystemInterfaceDisabledProvisioned", NULL);
+    }
+    // Other modes N/A for now, ignore the same.
+}
+
 void ProvModeMgr::init()
 {
     namespace secCtrl =
         sdbusplus::xyz::openbmc_project::Control::Security::server;
     iface = server.add_interface(provModePath, provModeIntf);
+    logEvent(provMode);
     iface->register_property(
         "RestrictionMode",
         sdbusplus::xyz::openbmc_project::Control::Security::server::
@@ -92,6 +121,7 @@ void ProvModeMgr::init()
                     secCtrl::RestrictionMode::Modes mode =
                         secCtrl::RestrictionMode::convertModesFromString(req);
                     provMode = mode;
+                    logEvent(mode);
                     updateProvModeProperty(mode);
                     return 1;
                 }

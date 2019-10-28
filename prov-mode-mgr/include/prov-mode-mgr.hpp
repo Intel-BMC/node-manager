@@ -55,6 +55,8 @@ class ProvModeMgr
     void updateProvModeProperty(
         sdbusplus::xyz::openbmc_project::Control::Security::server::
             RestrictionMode::Modes mode);
+    void logEvent(sdbusplus::xyz::openbmc_project::Control::Security::server::
+                      RestrictionMode::Modes mode);
 
   public:
     ProvModeMgr(boost::asio::io_service& io,
