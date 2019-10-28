@@ -39,7 +39,8 @@ constexpr const char *ipmbIntf = "org.openbmc.Ipmb";
 constexpr const char *sensorConfPath =
     "xyz.openbmc_project.Configuration.NMSensor";
 constexpr const char *sensorName = "Node_Manager_Sensor";
-constexpr const char *associationInterface = "org.openbmc.Associations";
+constexpr const char *associationInterface =
+    "xyz.openbmc_project.Association.Definitions";
 
 // this currently can be anything as it's only used to set the LED, might be
 // good later to change it for redfish, but I'm not sure to what today
