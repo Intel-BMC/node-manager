@@ -36,8 +36,8 @@ static constexpr const char *versionPurposeOther =
     "xyz.openbmc_project.Software.Version.VersionPurpose.Other";
 
 static constexpr const char *versionStr = "Version";
-static constexpr const char *ufmProvisionedStr = "ufm_provisioned";
-static constexpr const char *ufmLockedStr = "ufm_locked";
+static constexpr const char *ufmProvisionedStr = "UfmProvisioned";
+static constexpr const char *ufmLockedStr = "UfmLocked";
 
 class PfrVersion
 {
