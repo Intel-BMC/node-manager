@@ -286,31 +286,29 @@ void keepAlive(std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
         if (0 == pingPSU(addr))
         {
             auto found = psuPresence.find(addr);
-            if (found != psuPresence.end())
+            if (found == psuPresence.end())
             {
-                continue;
+                newPSUFound = true;
+                psuPresence.emplace(addr);
+                std::string psuNumStr = "PSU" + std::to_string(psuNumber);
+                sd_journal_send(
+                    "MESSAGE=%s", "New PSU is found", "PRIORITY=%i", LOG_INFO,
+                    "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PowerSupplyInserted",
+                    "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
             }
-            newPSUFound = true;
-            psuPresence.emplace(addr);
-            std::string psuNumStr = "PSU" + std::to_string(psuNumber);
-            sd_journal_send("MESSAGE=%s", "New PSU is found", "PRIORITY=%i",
-                            LOG_INFO, "REDFISH_MESSAGE_ID=%s",
-                            "OpenBMC.0.1.PowerSupplyInserted",
-                            "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
         }
         else
         {
             auto found = psuPresence.find(addr);
-            if (found == psuPresence.end())
+            if (found != psuPresence.end())
             {
-                continue;
+                psuPresence.erase(addr);
+                std::string psuNumStr = "PSU" + std::to_string(psuNumber);
+                sd_journal_send(
+                    "MESSAGE=%s", "One PSU is removed", "PRIORITY=%i", LOG_INFO,
+                    "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PowerSupplyRemoved",
+                    "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
             }
-            psuPresence.erase(addr);
-            std::string psuNumStr = "PSU" + std::to_string(psuNumber);
-            sd_journal_send("MESSAGE=%s", "One PSU is removed", "PRIORITY=%i",
-                            LOG_INFO, "REDFISH_MESSAGE_ID=%s",
-                            "OpenBMC.0.1.PowerSupplyRemoved",
-                            "REDFISH_MESSAGE_ARGS=%s", psuNumStr.c_str(), NULL);
         }
         psuNumber++;
     }
