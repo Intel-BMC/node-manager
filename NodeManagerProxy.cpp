@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     // associations have to be on the association interface
     std::shared_ptr<sdbusplus::asio::dbus_interface> statusInterface =
         server.add_interface(meStatusPath, associationInterface);
-    statusInterface->register_property("associations",
+    statusInterface->register_property("Associations",
                                        std::vector<Association>{});
     statusInterface->initialize();
 

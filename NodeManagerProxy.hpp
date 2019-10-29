@@ -622,7 +622,7 @@ class getNmStatistics : public Request
                                                    type + "/" + name,
                                                associationInterface);
 
-            association->register_property("associations", associations);
+            association->register_property("Associations", associations);
             association->initialize();
         }
     }
@@ -755,7 +755,7 @@ struct HealthData
             association.emplace_back("", "warning", globalInventoryPath);
             association.emplace_back("", "warning", meStatusPath);
         }
-        interface->set_property("associations", association);
+        interface->set_property("Associations", association);
     }
 
     void clear()
@@ -763,7 +763,7 @@ struct HealthData
         fatal.clear();
         critical.clear();
         warning.clear();
-        interface->set_property("associations", std::vector<Association>{});
+        interface->set_property("Associations", std::vector<Association>{});
     }
 
     std::shared_ptr<sdbusplus::asio::dbus_interface> interface;
