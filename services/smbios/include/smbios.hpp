@@ -21,6 +21,8 @@ static constexpr uint16_t mdrSmbiosSize = 32 * 1024;    // 32K
 static constexpr uint16_t mdrAcpiTableSize = 32 * 1024; // 32K
 static constexpr uint16_t mdrMemMappingSize = 8 * 1024; // 8K
 static constexpr uint16_t mdrScsiBootSize = 8 * 1024;   // 8K
+static constexpr uint16_t mdrNvmeSize = 1 * 1024;       // 1K
+
 static constexpr uint16_t smbiosTableStorageSize = 0xffff;
 
 static constexpr uint8_t mdrVersion = 0x11; // MDR version 1.1
@@ -31,17 +33,21 @@ static constexpr const char *mdrType2File = "/etc/smbios/smbios2";
 static constexpr const char *mdrAcpiFile = "/etc/smbios/acpi";
 static constexpr const char *mdrMemMapFile = "/etc/smbios/memmapping";
 static constexpr const char *mdrScsiBootFile = "/etc/smbios/scsiboot";
+static constexpr const char *mdrNvmeFile = "/etc/smbios/nvme";
 
-typedef enum {
+typedef enum
+{
     mdrNone = 0,
     mdrSmbios = 1,
     mdrAcpi = 2,
     mdrMemMap = 3,
     mdrScsiBoot = 4,
-    maxMdrIndex = 5
+    mdrNvme = 5,
+    maxMdrIndex = 6
 } MDRRegionIndex;
 
-typedef enum {
+typedef enum
+{
     regionLockUnlocked = 0,
     regionLockStrict,
     regionLockPreemptable
@@ -82,7 +88,8 @@ static constexpr const char *cpuPath =
 static constexpr const char *systemPath =
     "/xyz/openbmc_project/inventory/system/chassis/motherboard/bios";
 
-typedef enum {
+typedef enum
+{
     biosType = 0,
     systemType = 1,
     baseboardType = 2,

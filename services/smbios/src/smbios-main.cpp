@@ -24,8 +24,9 @@ uint8_t mdrSmBiosData[mdrSmbiosSize];
 uint8_t mdrAcpiTable[mdrAcpiTableSize];
 uint8_t mdrMemoryMapping[mdrMemMappingSize];
 uint8_t mdrSCSIBoot[mdrScsiBootSize];
+uint8_t mdrNvmeData[mdrNvmeSize];
 
-struct ManagedDataRegion regionS[4] = {
+struct ManagedDataRegion regionS[] = {
     // SMBIOS table - matching the regionID order
     {mdrType1File,
      mdrSmBiosData,
@@ -54,8 +55,14 @@ struct ManagedDataRegion regionS[4] = {
      0,
      {mdrVersion, mdrScsiBoot, false, 0, regionLockUnlocked, mdrScsiBootSize, 0,
       0},
-     0}
+     0},
 
+    // NVMe table - matching the regionID order
+    {mdrNvmeFile,
+     mdrNvmeData,
+     0,
+     {mdrVersion, mdrNvme, false, 0, regionLockUnlocked, mdrNvmeSize, 0, 0},
+     0},
 };
 
 int main(void)

@@ -49,7 +49,7 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
         sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1(bus, path),
         bus(bus)
     {
-        for (uint8_t index = 0; index < 4; index++)
+        for (uint8_t index = 0; index < maxMdrIndex - 1; index++)
         {
             timers[index] = std::make_unique<phosphor::watchdog::Timer>(
                 event, index, [&](uint8_t index) {
@@ -57,7 +57,7 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
                 });
         }
 
-        std::copy(&region[0], &region[3], regionS);
+        std::copy(region, region + maxRegion, regionS);
         if (access(smbiosPath, F_OK) == -1)
         {
             int flag = mkdir(smbiosPath, S_IRWXU);
@@ -112,7 +112,7 @@ class MDR_V1 : sdbusplus::xyz::openbmc_project::Smbios::server::MDR_V1
 
     uint16_t regionUsed(uint16_t value) override;
 
-    static constexpr uint8_t maxRegion = 5;
+    static constexpr uint8_t maxRegion = maxMdrIndex - 1;
 
     struct ManagedDataRegion regionS[maxRegion];
 
