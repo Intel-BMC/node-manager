@@ -52,36 +52,59 @@ static std::vector<std::tuple<std::string, ImageType, std::string>>
                         versionPurposeHost),
         std::make_tuple("cpld", ImageType::cpld, versionPurposeOther)};
 
-// Recovery reason map. { <CPLD association>, <Recovery Reason> }
-static std::map<uint8_t, std::string> recoveryReasonMap = {
-    {0x01, "PCH active authentication failure"},
-    {0x02, "PCH recovery authentication failure"},
-    {0x03, "ME launch failure"},
-    {0x04, "ACM launch failure"},
-    {0x05, "IBB launch failure"},
-    {0x06, "OBB launch failure"},
-    {0x07, "BMC active authentication failure"},
-    {0x08, "BMC recovery authentication failure"},
-    {0x09, "BMC launch failure"},
-    {0x0A, "CPLD watchdog expired"}};
+// Recovery reason map.
+// {<CPLD association>,{<Redfish MessageID>, <Recovery Reason>}}
+static const boost::container::flat_map<uint8_t,
+                                        std::pair<std::string, std::string>>
+    recoveryReasonMap = {
+        {0x01,
+         {"BIOSFirmwareRecoveryReason",
+          "PCH active image authentication failure"}},
+        {0x02,
+         {"BIOSFirmwareRecoveryReason",
+          "PCH recovery image authentication failure"}},
+        {0x03, {"MEFirmwareRecoveryReason", "ME launch failure"}},
+        {0x04, {"BIOSFirmwareRecoveryReason", "ACM launch failure"}},
+        {0x05, {"BIOSFirmwareRecoveryReason", "IBB launch failure"}},
+        {0x06, {"BIOSFirmwareRecoveryReason", "OBB launch failure"}},
+        {0x07,
+         {"BMCFirmwareRecoveryReason",
+          "BMC active image authentication failure"}},
+        {0x08,
+         {"BMCFirmwareRecoveryReason",
+          "BMC recovery image authentication failure"}},
+        {0x09, {"BMCFirmwareRecoveryReason", "BMC launch failure"}},
+        {0x0A, {"CPLDFirmwareRecoveryReason", "CPLD watchdog expired"}}};
 
-// Panic Reason map. { <CPLD association>, <Panic reason> }
-static std::map<uint8_t, std::string> panicReasonMap = {
-    {0x01, "CPLD watchdog expired"},
-    {0x02, "BMC watchdog expired"},
-    {0x03, "ME watchdog expired"},
-    {0x04, "ACM watchdog expired"},
-    {0x05, "IBB watchdog expired"},
-    {0x06, "OBB watchdog expired"},
-    {0x07, "BMC active authentication failure"},
-    {0x08, "BMC recovery authentication failure"},
-    {0x09, "PCH active authentication failure"},
-    {0x0A, "PCH recovery authentication failure"},
-    {0x0B, "ME authentication failure"},
-    {0x0C, "ACM or IBB or OBB authentication failure"},
-    {0x0D, "PCH update intent"},
-    {0x0E, "BMC update intent"},
-    {0x0F, "BMC reset detected"}};
+// Panic Reason map.
+// {<CPLD association>, {<Redfish MessageID>, <Panic reason> })
+static const boost::container::flat_map<uint8_t,
+                                        std::pair<std::string, std::string>>
+    panicReasonMap = {
+        {0x01, {"CPLDFirmwarePanicReason", "CPLD watchdog expired"}},
+        {0x02, {"BMCFirmwarePanicReason", "BMC watchdog expired"}},
+        {0x03, {"MEFirmwarePanicReason", "ME watchdog expired"}},
+        {0x04, {"BIOSFirmwarePanicReason", "ACM watchdog expired"}},
+        {0x05, {"BIOSFirmwarePanicReason", "IBB watchdog expired"}},
+        {0x06, {"BIOSFirmwarePanicReason", "OBB watchdog expired"}},
+        {0x07,
+         {"BMCFirmwarePanicReason", "BMC active image authentication failure"}},
+        {0x08,
+         {"BMCFirmwarePanicReason",
+          "BMC recovery image authentication failure"}},
+        {0x09,
+         {"BIOSFirmwarePanicReason",
+          "PCH active image authentication failure"}},
+        {0x0A,
+         {"BIOSFirmwarePanicReason",
+          "PCH recovery image authentication failure"}},
+        {0x0B, {"MEFirmwarePanicReason", "ME authentication failure"}},
+        {0x0C,
+         {"BIOSFirmwarePanicReason",
+          "ACM or IBB or OBB authentication failure"}},
+        {0x0D, {"BIOSFirmwarePanicReason", "PCH update intent"}},
+        {0x0E, {"BMCFirmwarePanicReason", "BMC update intent"}},
+        {0x0F, {"BMCFirmwarePanicReason", "BMC reset detected"}}};
 
 static void updateDbusPropertiesCache()
 {
@@ -106,18 +129,17 @@ static void logLastRecoveryEvent()
         return;
     }
 
-    std::map<uint8_t, std::string>::const_iterator it =
-        recoveryReasonMap.find(reason);
+    auto it = recoveryReasonMap.find(reason);
     if (it == recoveryReasonMap.end())
     {
         // No matching found. So just return without logging event.
         return;
     }
-
-    sd_journal_send(
-        "MESSAGE=%s", "Platform firmware recovered.", "PRIORITY=%i", LOG_ERR,
-        "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PlatformFirmwareEvent",
-        "REDFISH_MESSAGE_ARGS=%s,%s", "recovery", it->second.c_str(), NULL);
+    std::string msgId = "OpenBMC.0.1." + it->second.first;
+    sd_journal_send("MESSAGE=%s", "Platform firmware recovery occurred.",
+                    "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
+                    msgId.c_str(), "REDFISH_MESSAGE_ARGS=%s",
+                    it->second.second.c_str(), NULL);
 }
 
 static void logLastPanicEvent()
@@ -129,18 +151,18 @@ static void logLastPanicEvent()
         return;
     }
 
-    std::map<uint8_t, std::string>::const_iterator it =
-        panicReasonMap.find(reason);
+    auto it = panicReasonMap.find(reason);
     if (it == panicReasonMap.end())
     {
         // No matching found. So just return without logging event.
         return;
     }
 
-    sd_journal_send(
-        "MESSAGE=%s", "Platform panic event triggered.", "PRIORITY=%i", LOG_ERR,
-        "REDFISH_MESSAGE_ID=%s", "OpenBMC.0.1.PlatformFirmwareEvent",
-        "REDFISH_MESSAGE_ARGS=%s,%s", "panic", it->second.c_str(), NULL);
+    std::string msgId = "OpenBMC.0.1." + it->second.first;
+    sd_journal_send("MESSAGE=%s", "Platform firmware panic occurred.",
+                    "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
+                    msgId.c_str(), "REDFISH_MESSAGE_ARGS=%s",
+                    it->second.second.c_str(), NULL);
 }
 
 static void checkAndLogEvents()
