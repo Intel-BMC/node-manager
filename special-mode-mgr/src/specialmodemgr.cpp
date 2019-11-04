@@ -50,6 +50,15 @@ SpecialModeMgr::SpecialModeMgr(
     timer(std::make_unique<boost::asio::steady_timer>(io))
 {
 
+#ifdef BMC_VALIDATION_UNSECURE_FEATURE
+    if (std::filesystem::exists(validationModeFile))
+    {
+        specialMode = validationUnsecure;
+        addSpecialModeProperty();
+        return;
+    }
+#endif
+
     // Following condition must match to indicate specialMode.
     // Mark the mode as None for any failure.
     // 1. U-Boot detected power button press & indicated "special=mfg"
@@ -195,6 +204,17 @@ void SpecialModeMgr::addSpecialModeProperty()
         strSpecialMode, specialMode,
         // Ignore set
         [this](const uint8_t& req, uint8_t& propertyValue) {
+#ifdef BMC_VALIDATION_UNSECURE_FEATURE
+            if ((req == validationUnsecure) && (specialMode != req))
+            {
+                std::ofstream output(validationModeFile);
+                output.close();
+                specialMode = req;
+                propertyValue = req;
+                return 1;
+            }
+#endif
+
             if (req == manufacturingExpired && specialMode != req)
             {
                 specialMode = req;

@@ -18,6 +18,7 @@
 
 #include <sdbusplus/asio/object_server.hpp>
 #include <chrono>
+#include <filesystem>
 
 static constexpr const char* strSpecialMode = "SpecialMode";
 
@@ -25,7 +26,10 @@ enum SpecialMode : uint8_t
 {
     none = 0,
     manufacturingExpired = 1,
-    manufacturingMode = 2
+    manufacturingMode = 2,
+#ifdef BMC_VALIDATION_UNSECURE_FEATURE
+    validationUnsecure = 3,
+#endif
 };
 
 class SpecialModeMgr
@@ -38,6 +42,7 @@ class SpecialModeMgr
     std::unique_ptr<boost::asio::steady_timer> timer = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> intfAddMatchRule = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> propUpdMatchRule = nullptr;
+    std::filesystem::path validationModeFile = "/var/validation_unsecure_mode";
     void addSpecialModeProperty();
     void checkAndAddSpecialModeProperty(const std::string& provMode);
     void updateTimer(int countInSeconds);

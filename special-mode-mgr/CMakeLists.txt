@@ -37,6 +37,16 @@ target_link_libraries(${PROJECT_NAME} phosphor_logging)
 
 link_directories(${EXTERNAL_INSTALL_LOCATION}/lib)
 
+option(
+  BMC_VALIDATION_UNSECURE_FEATURE
+  "Enables unsecure features required by validation. Note: must
+    be turned off for production images."
+  OFF)
+target_compile_definitions(${PROJECT_NAME}
+                           PRIVATE
+                           $<$<BOOL:${BMC_VALIDATION_UNSECURE_FEATURE}>:
+                           -DBMC_VALIDATION_UNSECURE_FEATURE>)
+
 set(SERVICE_FILES ${PROJECT_SOURCE_DIR}/specialmodemgr.service)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
