@@ -40,6 +40,7 @@ static const constexpr char* inventoryPath =
 static const constexpr char* eventPath = "/xyz/openbmc_project/State/Decorator";
 static const constexpr char* coldRedundancyPath =
     "/xyz/openbmc_project/control/power_supply_redundancy";
+static const constexpr char* rootPath = "/xyz/openbmc_project/CallbackManager";
 
 static std::vector<std::unique_ptr<PowerSupply>> powerSupplies;
 static std::vector<uint64_t> addrTable = {0x50, 0x51};
@@ -53,8 +54,25 @@ ColdRedundancy::ColdRedundancy(
         *systemBus, coldRedundancyPath),
     timerRotation(io), timerCheck(io), systemBus(systemBus),
     warmRedundantTimer1(io), warmRedundantTimer2(io), keepAliveTimer(io),
-    filterTimer(io), puRedundantTimer(io)
+    filterTimer(io), puRedundantTimer(io), objServer(objectServer)
 {
+    associationsOk.emplace_back("", "", "");
+    associationsWarning.emplace_back("", "warning", coldRedundancyPath);
+    associationsWarning.emplace_back("", "warning", rootPath);
+    associationsNonCrit.emplace_back("", "critical", coldRedundancyPath);
+    associationsNonCrit.emplace_back("", "warning", rootPath);
+    associationsCrit.emplace_back("", "critical", coldRedundancyPath);
+    associationsCrit.emplace_back("", "critical", rootPath);
+
+    association = objectServer.add_interface(
+        coldRedundancyPath, "xyz.openbmc_project.Association.Definitions");
+    association->register_property("Associations", associationsOk);
+
+    if (!association->initialize())
+    {
+        std::cerr << "error initializing assoc interface\n";
+    }
+
     io.post([this, &io, &objectServer, &systemBus]() {
         createPSU(io, objectServer, systemBus);
     });
@@ -763,6 +781,7 @@ void ColdRedundancy::checkRedundancyEvent()
                         "MESSAGE=%s", "Power Unit Full Redundancy Regained",
                         "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
                         "OpenBMC.0.1.PowerUnitRedundancyRegained", NULL);
+                    association->set_property("Associations", associationsOk);
                 }
                 else if (psuPreviousWorkable <= redundancyPSURequire)
                 {
@@ -774,6 +793,8 @@ void ColdRedundancy::checkRedundancyEvent()
                         "Redundancy",
                         "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
                         "OpenBMC.0.1.PowerUnitDegradedFromNonRedundant", NULL);
+                    association->set_property("Associations",
+                                              associationsWarning);
                 }
             }
             else if (psuPreviousWorkable == 0)
@@ -786,6 +807,7 @@ void ColdRedundancy::checkRedundancyEvent()
                     "Power Unit Redundancy Sufficient from insufficient",
                     "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
                     "OpenBMC.0.1.PowerUnitNonRedundantFromInsufficient", NULL);
+                association->set_property("Associations", associationsNonCrit);
             }
         }
         else if (psuWorkable < psuPreviousWorkable)
@@ -798,6 +820,7 @@ void ColdRedundancy::checkRedundancyEvent()
                     "MESSAGE=%s", "Power Unit Redundancy Degraded",
                     "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
                     "OpenBMC.0.1.PowerUnitRedundancyDegraded", NULL);
+                association->set_property("Associations", associationsWarning);
 
                 if (psuPreviousWorkable == numberOfPSU)
                 {
@@ -830,6 +853,8 @@ void ColdRedundancy::checkRedundancyEvent()
                             "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
                             "OpenBMC.0.1.PowerUnitNonRedundantSufficient",
                             NULL);
+                        association->set_property("Associations",
+                                                  associationsNonCrit);
                     }
                 }
                 if (psuWorkable == 0)
@@ -839,6 +864,7 @@ void ColdRedundancy::checkRedundancyEvent()
                         "MESSAGE=%s", "Power Unit Redundancy Insufficient",
                         "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
                         "OpenBMC.0.1.PowerUnitNonRedundantInsufficient", NULL);
+                    association->set_property("Associations", associationsCrit);
                 }
             }
         }

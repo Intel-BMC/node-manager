@@ -23,6 +23,8 @@ const constexpr char* psuInterface =
 const constexpr int secondsInOneDay = 86400;
 const constexpr uint8_t bmcSpecific = 0;
 
+using Association = std::tuple<std::string, std::string, std::string>;
+
 class ColdRedundancy
     : sdbusplus::xyz::openbmc_project::Control::server::PowerSupplyRedundancy
 {
@@ -32,7 +34,10 @@ class ColdRedundancy
         sdbusplus::asio::object_server& objectServer,
         std::shared_ptr<sdbusplus::asio::connection>& dbusConnection,
         std::vector<std::unique_ptr<sdbusplus::bus::match::match>>& matches);
-    ~ColdRedundancy() = default;
+    ~ColdRedundancy()
+    {
+        objServer.remove_interface(association);
+    };
 
     uint8_t pSUNumber() const override;
     void
@@ -62,6 +67,7 @@ class ColdRedundancy
 
     void checkRedundancyEvent();
 
+    sdbusplus::asio::object_server& objServer;
     std::shared_ptr<sdbusplus::asio::connection>& systemBus;
 
     boost::asio::steady_timer timerRotation;
@@ -71,6 +77,12 @@ class ColdRedundancy
     boost::asio::steady_timer keepAliveTimer;
     boost::asio::steady_timer filterTimer;
     boost::asio::steady_timer puRedundantTimer;
+
+    std::shared_ptr<sdbusplus::asio::dbus_interface> association;
+    std::vector<Association> associationsOk;
+    std::vector<Association> associationsWarning;
+    std::vector<Association> associationsNonCrit;
+    std::vector<Association> associationsCrit;
 };
 
 constexpr const uint8_t pmbusCmdCRSupport = 0xd0;
