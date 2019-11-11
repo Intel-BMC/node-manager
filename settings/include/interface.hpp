@@ -89,7 +89,7 @@ struct SettingsInterface
         }
         else if constexpr (is_vector_v<T>)
         {
-            resp = {};
+            resp = T();
             for (const auto &val : data)
             {
                 using SubType = typename T::value_type;
