@@ -22,6 +22,8 @@
 #include <phosphor-logging/log.hpp>
 #include <string>
 
+namespace specialMode
+{
 static constexpr const char* specialModeMgrService =
     "xyz.openbmc_project.SpecialMode";
 static constexpr const char* specialModeIntf =
@@ -42,18 +44,21 @@ using VariantValue =
     std::variant<bool, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t,
                  uint64_t, double, std::string>;
 
+namespace secCtrl = sdbusplus::xyz::openbmc_project::Control::Security::server;
+
 SpecialModeMgr::SpecialModeMgr(
     boost::asio::io_service& io_, sdbusplus::asio::object_server& srv_,
     std::shared_ptr<sdbusplus::asio::connection>& conn_) :
     io(io_),
     server(srv_), conn(conn_),
-    timer(std::make_unique<boost::asio::steady_timer>(io))
+    timer(std::make_unique<boost::asio::steady_timer>(io)),
+    specialMode(secCtrl::SpecialMode::Modes::None)
 {
 
 #ifdef BMC_VALIDATION_UNSECURE_FEATURE
     if (std::filesystem::exists(validationModeFile))
     {
-        specialMode = validationUnsecure;
+        specialMode = secCtrl::SpecialMode::Modes::ValidationUnsecure;
         addSpecialModeProperty();
         return;
     }
@@ -131,7 +136,7 @@ SpecialModeMgr::SpecialModeMgr(
                 {
                     phosphor::logging::log<phosphor::logging::level::INFO>(
                         "Mode is not provisioning");
-                    setSpecialModeValue(manufacturingExpired);
+                    setSpecialModeValue(secCtrl::SpecialMode::Modes::None);
                 }
             });
 
@@ -182,7 +187,7 @@ void SpecialModeMgr::checkAndAddSpecialModeProperty(const std::string& provMode)
     int specialModeLockoutSeconds = 0;
     if (mtmAllowedTime > sysInfo.uptime)
     {
-        specialMode = manufacturingMode;
+        specialMode = secCtrl::SpecialMode::Modes::Manufacturing;
         specialModeLockoutSeconds = mtmAllowedTime - sysInfo.uptime;
         sd_journal_send("MESSAGE=%s", "Manufacturing mode - Entered",
                         "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
@@ -201,32 +206,41 @@ void SpecialModeMgr::addSpecialModeProperty()
     // Add path to server object
     iface = server.add_interface(specialModePath, specialModeIntf);
     iface->register_property(
-        strSpecialMode, specialMode,
+        strSpecialMode, secCtrl::convertForMessage(specialMode),
         // Ignore set
-        [this](const uint8_t& req, uint8_t& propertyValue) {
+        [this](const std::string& req, std::string& propertyValue) {
+            secCtrl::SpecialMode::Modes mode =
+                secCtrl::SpecialMode::convertModesFromString(req);
 #ifdef BMC_VALIDATION_UNSECURE_FEATURE
-            if ((req == validationUnsecure) && (specialMode != req))
+            if ((mode == secCtrl::SpecialMode::Modes::ValidationUnsecure) &&
+                (specialMode != mode))
             {
                 std::ofstream output(validationModeFile);
                 output.close();
-                specialMode = req;
+                specialMode = mode;
                 propertyValue = req;
                 return 1;
             }
 #endif
 
-            if (req == manufacturingExpired && specialMode != req)
+            if (mode == secCtrl::SpecialMode::Modes::None &&
+                specialMode != mode)
             {
-                specialMode = req;
+#ifdef BMC_VALIDATION_UNSECURE_FEATURE
+                std::remove(validationModeFile.c_str());
+#endif
+                specialMode = mode;
                 propertyValue = req;
                 return 1;
             }
             return 0;
         },
         // Override get
-        [this](const uint8_t& mode) { return specialMode; });
+        [this](const std::string& mode) {
+            return secCtrl::convertForMessage(specialMode);
+        });
     iface->register_method("ResetTimer", [this]() {
-        if (specialMode == manufacturingMode)
+        if (specialMode == secCtrl::SpecialMode::Modes::Manufacturing)
         {
             updateTimer(mtmAllowedTime);
         }
@@ -250,16 +264,20 @@ void SpecialModeMgr::updateTimer(int countInSeconds)
                 "Error in special mode timer");
             return;
         }
-        iface->set_property(strSpecialMode,
-                            static_cast<uint8_t>(manufacturingExpired));
+        iface->set_property(
+            strSpecialMode,
+            secCtrl::convertForMessage(secCtrl::SpecialMode::Modes::None));
         sd_journal_send("MESSAGE=%s", "Manufacturing mode - Exited",
                         "PRIORITY=%i", LOG_INFO, "REDFISH_MESSAGE_ID=%s",
                         "OpenBMC.0.1.ManufacturingModeExited", NULL);
     });
 }
 
+} // namespace specialMode
+
 int main()
 {
+    using namespace specialMode;
     boost::asio::io_service io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
     conn->request_name(specialModeMgrService);

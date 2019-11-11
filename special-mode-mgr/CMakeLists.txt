@@ -24,6 +24,15 @@ pkg_check_modules(SYSTEMD libsystemd REQUIRED)
 # import sdbusplus
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDBUSPLUSPLUS sdbusplus REQUIRED)
+include_directories(${SDBUSPLUSPLUS_INCLUDE_DIRS})
+link_directories(${SDBUSPLUSPLUS_LIBRARY_DIRS})
+find_program(SDBUSPLUSPLUS sdbus++)
+
+# phosphor-dbus-interfaces
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(DBUSINTERFACE phosphor-dbus-interfaces REQUIRED)
+include_directories(${DBUSINTERFACE_INCLUDE_DIRS})
+link_directories(${DBUSINTERFACE_LIBRARY_DIRS})
 
 # import phosphor-logging
 find_package(PkgConfig REQUIRED)
@@ -31,7 +40,8 @@ pkg_check_modules(LOGGING phosphor-logging REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} systemd)
-target_link_libraries(${PROJECT_NAME} sdbusplus)
+target_link_libraries(${PROJECT_NAME} ${SDBUSPLUSPLUS_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} phosphor_logging)
 

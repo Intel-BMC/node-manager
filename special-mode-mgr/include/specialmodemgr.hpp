@@ -19,18 +19,11 @@
 #include <sdbusplus/asio/object_server.hpp>
 #include <chrono>
 #include <filesystem>
+#include <xyz/openbmc_project/Control/Security/SpecialMode/server.hpp>
 
-static constexpr const char* strSpecialMode = "SpecialMode";
-
-enum SpecialMode : uint8_t
+namespace specialMode
 {
-    none = 0,
-    manufacturingExpired = 1,
-    manufacturingMode = 2,
-#ifdef BMC_VALIDATION_UNSECURE_FEATURE
-    validationUnsecure = 3,
-#endif
-};
+static constexpr const char* strSpecialMode = "SpecialMode";
 
 class SpecialModeMgr
 {
@@ -38,7 +31,8 @@ class SpecialModeMgr
     sdbusplus::asio::object_server& server;
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface;
-    uint8_t specialMode = none;
+    sdbusplus::xyz::openbmc_project::Control::Security::server::SpecialMode::
+        Modes specialMode;
     std::unique_ptr<boost::asio::steady_timer> timer = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> intfAddMatchRule = nullptr;
     std::unique_ptr<sdbusplus::bus::match::match> propUpdMatchRule = nullptr;
@@ -48,14 +42,19 @@ class SpecialModeMgr
     void updateTimer(int countInSeconds);
 
   public:
-    void setSpecialModeValue(uint8_t value) const
+    void setSpecialModeValue(
+        const sdbusplus::xyz::openbmc_project::Control::Security::server::
+            SpecialMode::Modes value) const
     {
         if (iface != nullptr && iface->is_initialized())
         {
-            iface->set_property(strSpecialMode, value);
+            iface->set_property(strSpecialMode,
+                                sdbusplus::xyz::openbmc_project::Control::
+                                    Security::server::convertForMessage(value));
         }
     }
     SpecialModeMgr(boost::asio::io_service& io,
                    sdbusplus::asio::object_server& srv,
                    std::shared_ptr<sdbusplus::asio::connection>& conn);
 };
+} // namespace specialMode
