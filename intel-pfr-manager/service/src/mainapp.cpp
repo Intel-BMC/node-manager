@@ -106,6 +106,22 @@ static const boost::container::flat_map<uint8_t,
         {0x0E, {"BMCFirmwarePanicReason", "BMC update intent"}},
         {0x0F, {"BMCFirmwarePanicReason", "BMC reset detected"}}};
 
+// Firmware resiliency major map.
+// {<CPLD association>, {<Redfish MessageID>, <Error reason> })
+static const boost::container::flat_map<uint8_t,
+                                        std::pair<std::string, std::string>>
+    majorErrorCodeMap = {
+        {0x01,
+         {"BMCFirmwareResiliencyError", "BMC image authentication failed"}},
+        {0x02,
+         {"BIOSFirmwareResiliencyError", "BIOS image authentication failed"}},
+        {0x03, {"BMCFirmwareResiliencyError", "BMC boot failed"}},
+        {0x04, {"MEFirmwareResiliencyError", "ME boot failed"}},
+        {0x05, {"BIOSFirmwareResiliencyError", "ACM boot failed"}},
+        {0x06, {"BIOSFirmwareResiliencyError", "BIOS boot failed"}},
+        {0x07, {"BIOSFirmwareResiliencyError", "Update from PCH failed"}},
+        {0x08, {"BIOSFirmwarePanicReason", "Update from BMC failed"}}};
+
 static void updateDbusPropertiesCache()
 {
     for (const auto& pfrVerObj : pfrVersionObjects)
@@ -165,6 +181,25 @@ static void logLastPanicEvent()
                     it->second.second.c_str(), NULL);
 }
 
+static void logResiliencyErrorEvent(const uint8_t majorErrorCode,
+                                    const uint8_t minorErrorCode)
+{
+    auto it = majorErrorCodeMap.find(majorErrorCode);
+    if (it == majorErrorCodeMap.end())
+    {
+        // No matching found. So just return without logging event.
+        return;
+    }
+
+    std::string errorStr =
+        it->second.second + "(MinorCode:0x" + toHexString(minorErrorCode) + ")";
+    std::string msgId = "OpenBMC.0.1." + it->second.first;
+    sd_journal_send(
+        "MESSAGE=%s", "Platform firmware resiliency error occurred.",
+        "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s", msgId.c_str(),
+        "REDFISH_MESSAGE_ARGS=%s", errorStr.c_str(), NULL);
+}
+
 static void checkAndLogEvents()
 {
     uint8_t currPanicCount = 0;
@@ -203,16 +238,7 @@ static void checkAndLogEvents()
             lastMajorErr = majorErr;
             lastMinorErr = minorErr;
 
-            if (majorErr || minorErr)
-            {
-                std::string errorStr =
-                    toHexString(majorErr) + "." + toHexString(minorErr);
-                sd_journal_send("MESSAGE=%s",
-                                "Error occurred on platform firmware.",
-                                "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
-                                "OpenBMC.0.1.PlatformFirmwareError",
-                                "REDFISH_MESSAGE_ARGS=%s", errorStr, NULL);
-            }
+            logResiliencyErrorEvent(majorErr, minorErr);
         }
     }
 }
