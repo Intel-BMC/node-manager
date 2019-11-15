@@ -1,0 +1,13 @@
+[Unit]
+Description= Security Manager - For At-ScaleDebug service, User security
+Requires=xyz.openbmc_project.EntityManager.service
+After=xyz.openbmc_project.ObjectMapper.service
+
+[Service]
+Restart=always
+ExecStart=/usr/bin/security-manager
+Type=simple
+SyslogIdentifier=security-manager
+
+[Install]
+WantedBy=multi-user.target
