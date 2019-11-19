@@ -28,9 +28,9 @@ static const constexpr std::array<const char*, 1> psuEventInterface = {
     "xyz.openbmc_project.State.Decorator.OperationalStatus"};
 
 using BasicVariantType =
-    std::variant<std::vector<std::string>, std::vector<uint64_t>, std::string,
-                 int64_t, uint64_t, double, int32_t, uint32_t, int16_t,
-                 uint16_t, uint8_t, bool>;
+    std::variant<std::vector<std::string>, std::vector<uint64_t>,
+                 std::vector<uint8_t>, std::string, int64_t, uint64_t, double,
+                 int32_t, uint32_t, int16_t, uint16_t, uint8_t, bool>;
 
 using PropertyMapType =
     boost::container::flat_map<std::string, BasicVariantType>;

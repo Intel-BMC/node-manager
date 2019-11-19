@@ -252,7 +252,7 @@ void getPSUEvent(const std::array<const char*, 1>& configTypes,
                                 if (ec)
                                 {
                                     std::cerr << "Exception happened when get "
-                                                 "functional propert\n";
+                                                 "functional property\n";
                                     return;
                                 }
 

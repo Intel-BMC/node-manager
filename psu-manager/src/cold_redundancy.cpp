@@ -73,6 +73,54 @@ ColdRedundancy::ColdRedundancy(
         std::cerr << "error initializing assoc interface\n";
     }
 
+    // set default configuration
+    powerSupplyRedundancyEnabled(true);
+    rotationEnabled(true);
+    periodOfRotation(7 * secondsInOneDay);
+    rotationAlgorithm(Algo::bmcSpecific);
+
+    // read configuration from settings service
+    systemBus->async_method_call(
+        [this](const boost::system::error_code ec, PropertyMapType& propMap) {
+            if (ec)
+            {
+                std::cerr << "Exception happened when get all properties\n";
+                return;
+            }
+            auto period = std::get_if<uint32_t>(&propMap["PeriodOfRotation"]);
+            auto redundancyEnabled =
+                std::get_if<bool>(&propMap["ColdRedundancyEnabled"]);
+            auto algorithm =
+                std::get_if<std::string>(&propMap["RotationAlgorithm"]);
+            auto enabled = std::get_if<bool>(&propMap["RotationEnabled"]);
+            auto rankOrder = std::get_if<std::vector<uint8_t>>(
+                &propMap["RotationRankOrder"]);
+
+            if (period == nullptr || redundancyEnabled == nullptr ||
+                algorithm == nullptr || enabled == nullptr ||
+                rankOrder == nullptr)
+            {
+                std::cerr << "error reading configuration data\n";
+                return;
+            }
+
+            periodOfRotation(*period);
+            powerSupplyRedundancyEnabled(*redundancyEnabled);
+            rotationAlgorithm(convertAlgoFromString(*algorithm));
+            rotationEnabled(*enabled);
+            rotationRankOrder(*rankOrder);
+
+            ColdRedundancy::configCR(false);
+            timerRotation.cancel();
+            startRotateCR();
+
+            // cache the rank order configuration
+            settingsOrder.assign(rankOrder->begin(), rankOrder->end());
+        },
+        "xyz.openbmc_project.Settings", coldRedundancyPath,
+        "org.freedesktop.DBus.Properties", "GetAll",
+        "xyz.openbmc_project.Control.PowerSupplyRedundancy");
+
     io.post([this, &io, &objectServer, &systemBus]() {
         createPSU(io, objectServer, systemBus);
     });
@@ -115,7 +163,7 @@ ColdRedundancy::ColdRedundancy(
                     bool* pCREnabled = std::get_if<bool>(&(value.second));
                     if (pCREnabled != nullptr)
                     {
-                        crEnabled = *pCREnabled;
+                        powerSupplyRedundancyEnabled(*pCREnabled);
                         ColdRedundancy::configCR(false);
                     }
                     continue;
@@ -125,7 +173,7 @@ ColdRedundancy::ColdRedundancy(
                     bool* pRotationEnabled = std::get_if<bool>(&(value.second));
                     if (pRotationEnabled != nullptr)
                     {
-                        rotationEnabled = *pRotationEnabled;
+                        rotationEnabled(*pRotationEnabled);
                         ColdRedundancy::configCR(false);
                     }
                     continue;
@@ -136,7 +184,7 @@ ColdRedundancy::ColdRedundancy(
                         std::get_if<std::string>(&(value.second));
                     if (pAlgo != nullptr)
                     {
-                        rotationAlgo = *pAlgo;
+                        rotationAlgorithm(convertAlgoFromString(*pAlgo));
                     }
                     continue;
                 }
@@ -150,6 +198,11 @@ ColdRedundancy::ColdRedundancy(
                     }
                     uint8_t rankSize = pRank->size();
                     uint8_t index = 0;
+
+                    // cache the rank order configuration
+                    settingsOrder.assign(pRank->begin(), pRank->end());
+
+                    // apply the order to all psus
                     for (auto& psu : powerSupplies)
                     {
                         if (index < rankSize)
@@ -162,7 +215,11 @@ ColdRedundancy::ColdRedundancy(
                         }
                         index++;
                     }
+
+                    // store the settings data into dbus
+                    rotationRankOrder(settingsOrder);
                     ColdRedundancy::configCR(false);
+
                     continue;
                 }
                 if (value.first == "PeriodOfRotation")
@@ -170,13 +227,14 @@ ColdRedundancy::ColdRedundancy(
                     uint32_t* pPeriod = std::get_if<uint32_t>(&(value.second));
                     if (pPeriod != nullptr)
                     {
-                        rotationPeriod = *pPeriod;
+                        periodOfRotation(*pPeriod);
                         timerRotation.cancel();
                         startRotateCR();
                     }
                     continue;
                 }
-                std::cerr << "Unused property changed\n";
+                std::cerr << "Unused property [" << value.first
+                          << "] changed\n";
             }
         };
 
@@ -257,9 +315,11 @@ ColdRedundancy::ColdRedundancy(
         matches.emplace_back(std::move(eventMatch));
     }
 
+    // monitor data change from settings service
     auto configParamMatch = std::make_unique<sdbusplus::bus::match::match>(
         static_cast<sdbusplus::bus::bus&>(*systemBus),
-        "type='signal',member='PropertiesChanged',path_namespace='" +
+        "type='signal',member='PropertiesChanged',sender='xyz.openbmc_project."
+        "Settings', path_namespace='" +
             std::string(coldRedundancyPath) + "',arg0namespace='" +
             redundancyInterface + "'",
         paramConfig);
@@ -475,13 +535,27 @@ void ColdRedundancy::createPSU(
                                     }
                                 }
 
+                                uint8_t order = 0;
+
+                                if (numberOfPSU < settingsOrder.size())
+                                {
+                                    order = settingsOrder[numberOfPSU];
+                                }
+
                                 powerSupplies.emplace_back(
                                     std::make_unique<PowerSupply>(
                                         *configName,
                                         static_cast<uint8_t>(*configBus),
                                         static_cast<uint8_t>(*configAddress),
-                                        conn));
+                                        order, conn));
+
                                 numberOfPSU++;
+                                std::vector<uint8_t> orders = {};
+                                for (auto& psu : powerSupplies)
+                                {
+                                    orders.push_back(psu->order);
+                                }
+                                rotationRankOrder(orders);
                             },
                             serviceName.c_str(), pathName.c_str(),
                             "org.freedesktop.DBus.Properties", "GetAll",
@@ -522,10 +596,10 @@ uint8_t ColdRedundancy::pSUNumber() const
 }
 
 PowerSupply::PowerSupply(
-    std::string name, uint8_t bus, uint8_t address,
+    std::string& name, uint8_t bus, uint8_t address, uint8_t order,
     const std::shared_ptr<sdbusplus::asio::connection>& dbusConnection) :
     name(name),
-    bus(bus), address(address)
+    bus(bus), address(address), order(order)
 {
     getPSUEvent(psuEventInterface, dbusConnection, name, state);
     if (debug)
@@ -541,8 +615,10 @@ PowerSupply::PowerSupply(
 void ColdRedundancy::reRanking(void)
 {
     uint8_t index = 1;
-    if (rotationAlgo ==
-        "xyz.openbmc_project.Control.PowerSupplyRedundancy.Algo.bmcSpecific")
+    uint8_t psuNumber = 0;
+    std::vector<uint8_t> orders = rotationRankOrder();
+
+    if (rotationAlgorithm() == Algo::bmcSpecific)
     {
         for (auto& psu : powerSupplies)
         {
@@ -554,7 +630,9 @@ void ColdRedundancy::reRanking(void)
             {
                 psu->order = 0;
             }
+            orders[psuNumber++] = psu->order;
         }
+        rotationRankOrder(orders);
     }
     else
     {
@@ -562,8 +640,7 @@ void ColdRedundancy::reRanking(void)
         {
             if (psu->state == PSUState::acLost)
             {
-                rotationAlgo = "xyz.openbmc_project.Control."
-                               "PowerSupplyRedundancy.Algo.bmcSpecific";
+                rotationAlgorithm(Algo::bmcSpecific);
                 reRanking();
                 return;
             }
@@ -573,7 +650,7 @@ void ColdRedundancy::reRanking(void)
 
 void ColdRedundancy::configCR(bool reConfig)
 {
-    if (!crSupported || !crEnabled)
+    if (!crSupported || !powerSupplyRedundancyEnabled())
     {
         return;
     }
@@ -616,7 +693,7 @@ void ColdRedundancy::checkCR(void)
     {
         return;
     }
-    if (!crEnabled)
+    if (!powerSupplyRedundancyEnabled())
     {
         putWarmRedundant();
         return;
@@ -665,7 +742,7 @@ void ColdRedundancy::startCRCheck()
 // rank order. And the PSU with last rank order will become the rank order 1
 void ColdRedundancy::rotateCR(void)
 {
-    if (!crSupported || !crEnabled)
+    if (!crSupported || !powerSupplyRedundancyEnabled())
     {
         return;
     }
@@ -708,12 +785,19 @@ void ColdRedundancy::rotateCR(void)
                 std::cerr << "Failed to change PSU Cold Redundancy order\n";
             }
         }
+
+        std::vector<uint8_t> orders = {};
+        for (auto& psu : powerSupplies)
+        {
+            orders.push_back(psu->order);
+        }
+        rotationRankOrder(orders);
     });
 }
 
 void ColdRedundancy::startRotateCR()
 {
-    timerRotation.expires_after(std::chrono::seconds(rotationPeriod));
+    timerRotation.expires_after(std::chrono::seconds(periodOfRotation()));
     timerRotation.async_wait([this](const boost::system::error_code& ec) {
         if (ec == boost::asio::error::operation_aborted)
         {
@@ -723,7 +807,7 @@ void ColdRedundancy::startRotateCR()
         {
             std::cerr << "timer error\n";
         }
-        if (crSupported && rotationEnabled)
+        if (crSupported && rotationEnabled())
         {
             rotateCR();
         }

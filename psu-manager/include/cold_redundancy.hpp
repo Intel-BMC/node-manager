@@ -21,7 +21,6 @@
 const constexpr char* psuInterface =
     "/xyz/openbmc_project/inventory/system/powersupply/";
 const constexpr int secondsInOneDay = 86400;
-const constexpr uint8_t bmcSpecific = 0;
 
 using Association = std::tuple<std::string, std::string, std::string>;
 
@@ -47,14 +46,10 @@ class ColdRedundancy
 
   private:
     bool crSupported = true;
-    bool crEnabled = true;
-    bool rotationEnabled = true;
-    std::string rotationAlgo =
-        "xyz.openbmc_project.Control.PowerSupplyRedundancy.Algo.bmcSpecific";
     uint8_t psOrder;
     uint8_t numberOfPSU = 0;
-    uint32_t rotationPeriod = 7 * secondsInOneDay;
     uint8_t redundancyPSURequire = 1;
+    std::vector<uint8_t> settingsOrder = {};
 
     void startRotateCR(void);
     void startCRCheck(void);
@@ -91,7 +86,7 @@ class PowerSupply
 {
   public:
     PowerSupply(
-        std::string name, uint8_t bus, uint8_t address,
+        std::string& name, uint8_t bus, uint8_t address, uint8_t order,
         const std::shared_ptr<sdbusplus::asio::connection>& dbusConnection);
     ~PowerSupply();
     std::string name;
