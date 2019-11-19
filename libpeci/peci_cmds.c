@@ -214,8 +214,8 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 2:
-                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Pkg Read\n");
@@ -242,9 +242,9 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 3:
-                u32PkgValue = strtoul(argv[--index], NULL, 16);
-                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u32PkgValue = strtoul(argv[--index], NULL, 0);
+                u16PkgParam = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PkgIndex = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Pkg Write\n");
@@ -271,8 +271,8 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 2:
-                u16MsrAddr = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8MsrThread = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u16MsrAddr = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8MsrThread = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for MSR Read\n");
@@ -298,16 +298,16 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 4:
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 3:
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 2:
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 1:
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for PCI Read\n");
@@ -334,16 +334,16 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 4:
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 3:
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 2:
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 1:
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Local PCI Read\n");
@@ -368,20 +368,20 @@ int main(int argc, char* argv[])
     else if (strcmp(cmd, "wrpciconfiglocal") == 0)
     {
         index = argc;
-        u32PciWriteVal = strtoul(argv[--index], NULL, 16);
+        u32PciWriteVal = strtoul(argv[--index], NULL, 0);
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 4:
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 3:
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
                 /* FALLTHROUGH */
             case 2:
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
             default:
                 printf("ERROR: Unsupported arguments for Local PCI Write\n");
@@ -409,11 +409,11 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
 
             default:
@@ -443,12 +443,12 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 6:
-                u32PciWriteVal = strtoul(argv[--index], NULL, 16);
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u32PciWriteVal = strtoul(argv[--index], NULL, 0);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
 
             default:
@@ -479,11 +479,11 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 5:
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
 
             default:
@@ -511,12 +511,12 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 6:
-                u32PciWriteVal = strtoul(argv[--index], NULL, 16);
-                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 16);
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u32PciWriteVal = strtoul(argv[--index], NULL, 0);
+                u16PciReg = (uint16_t)strtoul(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
 
             default:
@@ -546,13 +546,13 @@ int main(int argc, char* argv[])
         switch (argc - optind)
         {
             case 7:
-                u64Offset = strtoull(argv[--index], NULL, 16);
-                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8Bar = (uint8_t)strtoul(argv[--index], NULL, 16);
-                u8AddrType = (uint8_t)strtoul(argv[--index], NULL, 16);
+                u64Offset = strtoull(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Bar = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8AddrType = (uint8_t)strtoul(argv[--index], NULL, 0);
                 break;
 
             default:
@@ -585,11 +585,11 @@ int main(int argc, char* argv[])
         }
 
         // Address is provided in the first byte of the PECI command
-        uint8_t rawAddr = (uint8_t)strtoul(argv[optind++], NULL, 16);
+        uint8_t rawAddr = (uint8_t)strtoul(argv[optind++], NULL, 0);
         // Write length is provided in the second byte of the PECI command
-        uint8_t writeLength = (uint8_t)strtoul(argv[optind++], NULL, 16);
+        uint8_t writeLength = (uint8_t)strtoul(argv[optind++], NULL, 0);
         // Read length is provided in the third byte of the PECI command
-        uint8_t readLength = (uint8_t)strtoul(argv[optind++], NULL, 16);
+        uint8_t readLength = (uint8_t)strtoul(argv[optind++], NULL, 0);
 
         // remaining parameters should match write length
         if ((argc - optind) != writeLength)
@@ -606,7 +606,7 @@ int main(int argc, char* argv[])
         }
         for (i = 0; i < writeLength; i++)
         {
-            rawCmd[i] = (uint8_t)strtoul(argv[i + optind], NULL, 16);
+            rawCmd[i] = (uint8_t)strtoul(argv[i + optind], NULL, 0);
         }
         if (verbose)
         {
