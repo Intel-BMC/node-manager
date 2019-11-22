@@ -32,12 +32,8 @@ extern "C" {
 
 typedef enum
 {
-    skx = 0x00050654,
-    clx = 0x00050656,
-    clx2 = 0x00050657,
-    cpx = 0x0005065A,
+    skx = 0x00050650,
     icx = 0x000606A0,
-    icx2 = 0x000606A4,
 } CPUModel;
 
 // PECI Status Codes
@@ -235,7 +231,7 @@ void peci_Unlock(int peci_fd);
 EPECIStatus peci_Ping(uint8_t target);
 EPECIStatus peci_Ping_seq(uint8_t target, int peci_fd);
 EPECIStatus peci_GetCPUID(const uint8_t clientAddr, CPUModel* cpuModel,
-                          uint8_t* cc);
+                          uint8_t* stepping, uint8_t* cc);
 
 #ifdef __cplusplus
 }

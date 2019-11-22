@@ -1134,12 +1134,16 @@ EPECIStatus peci_raw(uint8_t target, uint8_t u8ReadLen, const uint8_t* pRawCmd,
 }
 
 /*-------------------------------------------------------------------------
- * This function returns the CPUID for the given PECI client address
+ * This function returns the CPUID (Model and stepping) for the given PECI
+ * client address
  *------------------------------------------------------------------------*/
 EPECIStatus peci_GetCPUID(const uint8_t clientAddr, CPUModel* cpuModel,
-                          uint8_t* cc)
+                          uint8_t* stepping, uint8_t* cc)
 {
-    if (cpuModel == NULL || cc == NULL)
+    EPECIStatus ret = PECI_CC_SUCCESS;
+    uint32_t cpuid = 0;
+
+    if (cpuModel == NULL || stepping == NULL || cc == NULL)
     {
         return PECI_CC_INVALID_REQ;
     }
@@ -1149,7 +1153,12 @@ EPECIStatus peci_GetCPUID(const uint8_t clientAddr, CPUModel* cpuModel,
         return PECI_CC_CPU_NOT_PRESENT;
     }
 
-    return peci_RdPkgConfig(clientAddr, PECI_MBX_INDEX_CPU_ID,
-                            PECI_PKG_ID_CPU_ID, sizeof(uint32_t),
-                            (uint8_t*)cpuModel, cc);
+    ret =
+        peci_RdPkgConfig(clientAddr, PECI_MBX_INDEX_CPU_ID, PECI_PKG_ID_CPU_ID,
+                         sizeof(uint32_t), (uint8_t*)&cpuid, cc);
+
+    // Separate out the model and stepping (bits 3:0) from the CPUID
+    *cpuModel = cpuid & 0xFFFFFFF0;
+    *stepping = (uint8_t)(cpuid & 0x0000000F);
+    return ret;
 }
