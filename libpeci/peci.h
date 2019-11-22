@@ -209,6 +209,14 @@ EPECIStatus peci_WrEndPointPCIConfig(uint8_t target, uint8_t u8Seg,
                                      uint8_t DataLen, uint32_t DataVal,
                                      uint8_t* cc);
 
+// Allows sequential write access to the EP PCI Configuration space
+EPECIStatus peci_WrEndPointConfig_seq(uint8_t target, uint8_t u8MsgType,
+                                      uint8_t u8Seg, uint8_t u8Bus,
+                                      uint8_t u8Device, uint8_t u8Fcn,
+                                      uint16_t u16Reg, uint8_t DataLen,
+                                      uint32_t DataVal, int peci_fd,
+                                      uint8_t* cc);
+
 // Provides access to the Crashdump Discovery API
 EPECIStatus peci_CrashDump_Discovery(uint8_t target, uint8_t subopcode,
                                      uint8_t param0, uint16_t param1,

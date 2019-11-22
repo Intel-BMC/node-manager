@@ -897,16 +897,16 @@ EPECIStatus peci_RdEndPointConfigMmio_seq(
 }
 
 /*-------------------------------------------------------------------------
- * This internal function is the common interface for WdEndPointConfig to PCI
+ * This function allows sequential peci_WrEndPointConfig to PCI EndPoint with
+ *the provided peci file descriptor.
  *------------------------------------------------------------------------*/
-static EPECIStatus peci_WrEndPointConfigCommon(uint8_t target,
-                                               uint8_t u8MsgType, uint8_t u8Seg,
-                                               uint8_t u8Bus, uint8_t u8Device,
-                                               uint8_t u8Fcn, uint16_t u16Reg,
-                                               uint8_t DataLen,
-                                               uint32_t DataVal, uint8_t* cc)
+EPECIStatus peci_WrEndPointConfig_seq(uint8_t target, uint8_t u8MsgType,
+                                      uint8_t u8Seg, uint8_t u8Bus,
+                                      uint8_t u8Device, uint8_t u8Fcn,
+                                      uint16_t u16Reg, uint8_t DataLen,
+                                      uint32_t DataVal, int peci_fd,
+                                      uint8_t* cc)
 {
-    int peci_fd = -1;
     struct peci_wr_end_pt_cfg_msg cmd;
     EPECIStatus ret;
 
@@ -919,11 +919,6 @@ static EPECIStatus peci_WrEndPointConfigCommon(uint8_t target,
     if (DataLen != 1 && DataLen != 2 && DataLen != 4)
     {
         return PECI_CC_INVALID_REQ;
-    }
-
-    if (peci_Open(&peci_fd) != PECI_CC_SUCCESS)
-    {
-        return PECI_CC_DRIVER_ERR;
     }
 
     cmd.addr = target;
@@ -939,7 +934,6 @@ static EPECIStatus peci_WrEndPointConfigCommon(uint8_t target,
     ret = HW_peci_issue_cmd(PECI_IOC_WR_END_PT_CFG, (char*)&cmd, peci_fd);
     *cc = cmd.cc;
 
-    peci_Close(peci_fd);
     return ret;
 }
 
@@ -952,9 +946,19 @@ EPECIStatus peci_WrEndPointPCIConfigLocal(uint8_t target, uint8_t u8Seg,
                                           uint8_t DataLen, uint32_t DataVal,
                                           uint8_t* cc)
 {
-    return peci_WrEndPointConfigCommon(target, PECI_ENDPTCFG_TYPE_LOCAL_PCI,
-                                       u8Seg, u8Bus, u8Device, u8Fcn, u16Reg,
-                                       DataLen, DataVal, cc);
+    int peci_fd = -1;
+    EPECIStatus ret;
+
+    if (peci_Open(&peci_fd) != PECI_CC_SUCCESS)
+    {
+        return PECI_CC_DRIVER_ERR;
+    }
+
+    ret = peci_WrEndPointConfig_seq(target, PECI_ENDPTCFG_TYPE_LOCAL_PCI, u8Seg,
+                                    u8Bus, u8Device, u8Fcn, u16Reg, DataLen,
+                                    DataVal, peci_fd, cc);
+    peci_Close(peci_fd);
+    return ret;
 }
 
 /*-------------------------------------------------------------------------
@@ -966,9 +970,18 @@ EPECIStatus peci_WrEndPointPCIConfig(uint8_t target, uint8_t u8Seg,
                                      uint8_t DataLen, uint32_t DataVal,
                                      uint8_t* cc)
 {
-    return peci_WrEndPointConfigCommon(target, PECI_ENDPTCFG_TYPE_PCI, u8Seg,
-                                       u8Bus, u8Device, u8Fcn, u16Reg, DataLen,
-                                       DataVal, cc);
+    int peci_fd = -1;
+    EPECIStatus ret;
+
+    if (peci_Open(&peci_fd) != PECI_CC_SUCCESS)
+    {
+        return PECI_CC_DRIVER_ERR;
+    }
+    ret = peci_WrEndPointConfig_seq(target, PECI_ENDPTCFG_TYPE_PCI, u8Seg,
+                                    u8Bus, u8Device, u8Fcn, u16Reg, DataLen,
+                                    DataVal, peci_fd, cc);
+    peci_Close(peci_fd);
+    return ret;
 }
 
 /*-------------------------------------------------------------------------
