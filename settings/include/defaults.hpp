@@ -244,7 +244,11 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
         "/xyz/openbmc_project/control/chassis_capabilities_config",
         "xyz.openbmc_project.Control.ChassisCapabilities");
 
-    setting->addProperty("CapabilitiesFlags", static_cast<uint8_t>(0));
+    setting->addProperty("CapabilitiesFlags", static_cast<uint8_t>(7));
+    setting->addProperty("ChassisIntrusionEnabled", true);
+    setting->addProperty("ChassisFrontPanelLockoutEnabled", true);
+    setting->addProperty("ChassisNMIEnabled", true);
+    setting->addProperty("ChassisPowerInterlockEnabled", false);
     setting->addProperty("FRUDeviceAddress", static_cast<uint8_t>(32));
     setting->addProperty("SDRDeviceAddress", static_cast<uint8_t>(32));
     setting->addProperty("SELDeviceAddress", static_cast<uint8_t>(32));
