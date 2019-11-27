@@ -925,7 +925,7 @@ void ColdRedundancy::checkRedundancyEvent()
                     // previously system is in redundancy mode.
                     sd_journal_send(
                         "MESSAGE=%s", "Power Unit Redundancy Lost",
-                        "PRIORITY=%i", LOG_ERR, "REDFISH_MESSAGE_ID=%s",
+                        "PRIORITY=%i", LOG_WARNING, "REDFISH_MESSAGE_ID=%s",
                         "OpenBMC.0.1.PowerUnitRedundancyLost", NULL);
                     if (psuWorkable > 0)
                     {
@@ -938,7 +938,7 @@ void ColdRedundancy::checkRedundancyEvent()
                             "OpenBMC.0.1.PowerUnitNonRedundantSufficient",
                             NULL);
                         association->set_property("Associations",
-                                                  associationsNonCrit);
+                                                  associationsWarning);
                     }
                 }
                 if (psuWorkable == 0)
