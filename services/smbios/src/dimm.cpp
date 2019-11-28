@@ -22,6 +22,9 @@ namespace phosphor
 namespace smbios
 {
 
+using DeviceType =
+    sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::DeviceType;
+
 static constexpr uint16_t maxOldDimmSize = 0x7fff;
 void Dimm::memoryInfoUpdate(void)
 {
@@ -63,12 +66,12 @@ void Dimm::memoryInfoUpdate(void)
     dimmDeviceLocator(memoryInfo->deviceLocator, memoryInfo->length, dataIn);
     dimmType(memoryInfo->memoryType);
     dimmTypeDetail(memoryInfo->typeDetail);
-    memorySpeed(memoryInfo->speed);
+    maxMemorySpeedInMhz(memoryInfo->speed);
     dimmManufacturer(memoryInfo->manufacturer, memoryInfo->length, dataIn);
     dimmSerialNum(memoryInfo->serialNum, memoryInfo->length, dataIn);
     dimmPartNum(memoryInfo->partNum, memoryInfo->length, dataIn);
     memoryAttributes(memoryInfo->attributes);
-    memoryConfClockSpeed(memoryInfo->confClockSpeed);
+    memoryConfiguredSpeedInMhz(memoryInfo->confClockSpeed);
 
     return;
 }
@@ -121,11 +124,10 @@ std::string Dimm::memoryDeviceLocator(std::string value)
 
 void Dimm::dimmType(uint8_t type)
 {
-    std::map<uint8_t, std::string>::const_iterator it =
-        dimmTypeTable.find(type);
+    std::map<uint8_t, DeviceType>::const_iterator it = dimmTypeTable.find(type);
     if (it == dimmTypeTable.end())
     {
-        memoryType("Unknown Memory Type");
+        memoryType(DeviceType::Unknown);
     }
     else
     {
@@ -133,7 +135,7 @@ void Dimm::dimmType(uint8_t type)
     }
 }
 
-std::string Dimm::memoryType(std::string value)
+DeviceType Dimm::memoryType(DeviceType value)
 {
     return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
         memoryType(value);
@@ -159,10 +161,10 @@ std::string Dimm::memoryTypeDetail(std::string value)
         memoryTypeDetail(value);
 }
 
-uint16_t Dimm::memorySpeed(uint16_t value)
+uint16_t Dimm::maxMemorySpeedInMhz(uint16_t value)
 {
     return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
-        memorySpeed(value);
+        maxMemorySpeedInMhz(value);
 }
 
 void Dimm::dimmManufacturer(uint8_t positionNum, uint8_t structLen,
@@ -218,10 +220,10 @@ uint8_t Dimm::memoryAttributes(uint8_t value)
         memoryAttributes(value);
 }
 
-uint16_t Dimm::memoryConfClockSpeed(uint16_t value)
+uint16_t Dimm::memoryConfiguredSpeedInMhz(uint16_t value)
 {
     return sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::
-        memoryConfClockSpeed(value);
+        memoryConfiguredSpeedInMhz(value);
 }
 
 } // namespace smbios
