@@ -26,6 +26,9 @@ namespace phosphor
 namespace smbios
 {
 
+using DeviceType =
+    sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm::DeviceType;
+
 class Dimm
     : sdbusplus::server::object::object<
           sdbusplus::xyz::openbmc_project::Inventory::Item::server::Dimm>,
@@ -59,14 +62,14 @@ class Dimm
     uint16_t memoryDataWidth(uint16_t value) override;
     uint32_t memorySizeInKB(uint32_t value) override;
     std::string memoryDeviceLocator(std::string value) override;
-    std::string memoryType(std::string value) override;
+    DeviceType memoryType(DeviceType value) override;
     std::string memoryTypeDetail(std::string value) override;
-    uint16_t memorySpeed(uint16_t value) override;
+    uint16_t maxMemorySpeedInMhz(uint16_t value) override;
     std::string manufacturer(std::string value) override;
     std::string serialNumber(std::string value) override;
     std::string partNumber(std::string value) override;
     uint8_t memoryAttributes(uint8_t value) override;
-    uint16_t memoryConfClockSpeed(uint16_t value) override;
+    uint16_t memoryConfiguredSpeedInMhz(uint16_t value) override;
 
   private:
     uint8_t dimmNum;
@@ -113,14 +116,22 @@ class Dimm
     } __attribute__((packed));
 };
 
-const std::map<uint8_t, const char *> dimmTypeTable = {
-    {0x1, "Other"},   {0x2, "Unknown"}, {0x3, "DRAM"},   {0x4, "EDRAM"},
-    {0x5, "VRAM"},    {0x6, "SRAM"},    {0x7, "RAM"},    {0x8, "ROM"},
-    {0x9, "FLASH"},   {0xa, "EEPROM"},  {0xb, "FEPROM"}, {0xc, "EPROM"},
-    {0xd, "CDRAM"},   {0xe, "3DRAM"},   {0xf, "SDRAM"},  {0x10, "SGRAM"},
-    {0x11, "RDRAM"},  {0x12, "DDR"},    {0x13, "DDR2"},  {0x14, "DDR2 FB-DIMM"},
-    {0x18, "DDR3"},   {0x19, "FBD2"},   {0x1a, "DDR4"},  {0x1b, "LPDDR"},
-    {0x1c, "LPDDR2"}, {0x1d, "LPDDR3"}, {0x1e, "LPDDR4"}};
+const std::map<uint8_t, DeviceType> dimmTypeTable = {
+    {0x1, DeviceType::Other},         {0x2, DeviceType::Unknown},
+    {0x3, DeviceType::DRAM},          {0x4, DeviceType::EDRAM},
+    {0x5, DeviceType::VRAM},          {0x6, DeviceType::SRAM},
+    {0x7, DeviceType::RAM},           {0x8, DeviceType::ROM},
+    {0x9, DeviceType::FLASH},         {0xa, DeviceType::EEPROM},
+    {0xb, DeviceType::FEPROM},        {0xc, DeviceType::EPROM},
+    {0xd, DeviceType::CDRAM},         {0xe, DeviceType::ThreeDRAM},
+    {0xf, DeviceType::SDRAM},         {0x10, DeviceType::DDR_SGRAM},
+    {0x11, DeviceType::RDRAM},        {0x12, DeviceType::DDR},
+    {0x13, DeviceType::DDR2},         {0x14, DeviceType::DDR2_SDRAM_FB_DIMM},
+    {0x18, DeviceType::DDR3},         {0x19, DeviceType::FBD2},
+    {0x1a, DeviceType::DDR4},         {0x1b, DeviceType::LPDDR_SDRAM},
+    {0x1c, DeviceType::LPDDR2_SDRAM}, {0x1d, DeviceType::LPDDR3_SDRAM},
+    {0x1e, DeviceType::LPDDR4_SDRAM}, {0x1f, DeviceType::Logical},
+    {0x20, DeviceType::HBM},          {0x21, DeviceType::HBM2}};
 
 const std::array<std::string, 16> detailTable{
     "Reserved",      "Other",         "Unknown",     "Fast-paged",
