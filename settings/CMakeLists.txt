@@ -79,4 +79,5 @@ if (NOT YOCTO)
 endif ()
 
 install (TARGETS settings DESTINATION bin)
-install (FILES settings.service DESTINATION /lib/systemd/system/)
+install (FILES xyz.openbmc_project.Settings.service DESTINATION
+               /lib/systemd/system/)
