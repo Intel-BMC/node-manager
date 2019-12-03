@@ -249,7 +249,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
                                      "/xyz/openbmc_project/ipmi/sol/eth0",
                                      "xyz.openbmc_project.Ipmi.SOL");
 
-    setting->addProperty("Progress", static_cast<uint8_t>(0));
+    setting->addProperty("Progress", static_cast<uint8_t>(0), false);
     setting->addProperty("Enable", false);
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
@@ -263,7 +263,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
                                      "/xyz/openbmc_project/ipmi/sol/eth1",
                                      "xyz.openbmc_project.Ipmi.SOL");
 
-    setting->addProperty("Progress", static_cast<uint8_t>(0));
+    setting->addProperty("Progress", static_cast<uint8_t>(0), false);
     setting->addProperty("Enable", false);
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
@@ -277,7 +277,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
                                      "/xyz/openbmc_project/ipmi/sol/eth2",
                                      "xyz.openbmc_project.Ipmi.SOL");
 
-    setting->addProperty("Progress", static_cast<uint8_t>(0));
+    setting->addProperty("Progress", static_cast<uint8_t>(0), false);
     setting->addProperty("Enable", false);
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
