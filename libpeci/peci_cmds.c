@@ -49,12 +49,11 @@ void Usage(char* progname)
     printf("\t%-28s%s\n", "WrPkgConfig",
            "Write Package Config <Index Parameter Data>");
     printf("\t%-28s%s\n", "RdIAMSR", "MSR Read <Thread Address>");
-    printf("\t%-28s%s\n", "RdPCIConfig",
-           "PCI Read for specific hex address <Bus Dev Func [Reg]>");
+    printf("\t%-28s%s\n", "RdPCIConfig", "PCI Read <Bus Dev Func [Reg]>");
     printf("\t%-28s%s\n", "RdPCIConfigLocal",
-           "Local PCI Read for specific hex address <Bus Dev Func [Reg]>");
+           "Local PCI Read <Bus Dev Func [Reg]>");
     printf("\t%-28s%s\n", "WrPCIConfigLocal",
-           "Local PCI Write for specific hex address <Bus Dev Func Reg Data>");
+           "Local PCI Write <Bus Dev Func Reg Data>");
     printf("\t%-28s%s\n", "RdEndpointConfigPCILocal",
            "Endpoint Local PCI Config Read <Seg Bus Dev Func Reg>");
     printf("\t%-28s%s\n", "WrEndpointConfigPCILocal",
@@ -65,7 +64,7 @@ void Usage(char* progname)
            "Endpoint PCI Config Write <Seg Bus Dev Func Reg Data>");
     printf("\t%-28s%s\n", "RdEndpointConfigMMIO",
            "Endpoint MMIO Read <AType Bar Seg Bus Dev Func Reg>");
-    printf("\t%-28s%s\n", "raw", "Raw PECI command in hex bytes");
+    printf("\t%-28s%s\n", "raw", "Raw PECI command in bytes");
     printf("\n");
 }
 
