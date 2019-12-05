@@ -24,7 +24,8 @@ namespace pfr
 
 enum class ImageType
 {
-    cpld,
+    cpldActive,
+    cpldRecovery,
     biosActive,
     biosRecovery,
     bmcActive,

@@ -61,7 +61,8 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
      * "RequestedActivation" to None. */
     std::string activation =
         (imgType == ImageType::bmcRecovery ||
-         imgType == ImageType::biosRecovery)
+         imgType == ImageType::biosRecovery ||
+         imgType == ImageType::cpldRecovery)
             ? "xyz.openbmc_project.Software.Activation.Activations.StandbySpare"
             : "xyz.openbmc_project.Software.Activation.Activations.Active";
     std::string reqActNone =

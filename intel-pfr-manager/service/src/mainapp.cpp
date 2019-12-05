@@ -50,7 +50,11 @@ static std::vector<std::tuple<std::string, ImageType, std::string>>
                         versionPurposeHost),
         std::make_tuple("bios_recovery", ImageType::biosRecovery,
                         versionPurposeHost),
-        std::make_tuple("cpld", ImageType::cpld, versionPurposeOther)};
+        std::make_tuple("cpld_active", ImageType::cpldActive,
+                        versionPurposeOther),
+        std::make_tuple("cpld_recovery", ImageType::cpldRecovery,
+                        versionPurposeOther),
+};
 
 // Recovery reason map.
 // {<CPLD association>,{<Redfish MessageID>, <Recovery Reason>}}

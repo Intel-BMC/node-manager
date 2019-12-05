@@ -155,8 +155,10 @@ std::string getFirmwareVersion(const ImageType& imgType)
 {
     switch (imgType)
     {
-        case (ImageType::cpld):
+        case (ImageType::cpldActive):
+        case (ImageType::cpldRecovery):
         {
+            // TO-DO: Need to update once CPLD supported Firmware is available
             return readVersionFromCPLD(cpldROTVersion, cpldROTSvn);
         }
         case (ImageType::biosActive):
