@@ -305,6 +305,14 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("Enabled", true);
 
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/software/apply_time",
+                                     "xyz.openbmc_project.Software.ApplyTime");
+
+    setting->addProperty(
+        "RequestedApplyTime",
+        "xyz.openbmc_project.Software.ApplyTime.RequestedApplyTimes.Immediate");
+
     for (SettingsInterface &s : settings)
     {
         s.initialize();
