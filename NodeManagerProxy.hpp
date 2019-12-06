@@ -506,7 +506,7 @@ class Request
                                 const std::vector<uint8_t> &dataReceived) = 0;
 
     virtual void createAssociation(sdbusplus::asio::object_server &server,
-                                   std::string &path){};
+                                   const std::string &path){};
 
     virtual ~Request(){};
 
@@ -612,12 +612,12 @@ class getNmStatistics : public Request
     }
 
     void createAssociation(sdbusplus::asio::object_server &server,
-                           std::string &path)
+                           const std::string &path)
     {
         if (!association)
         {
             std::vector<Association> associations;
-            associations.push_back(Association("inventory", "sensors", path));
+            associations.push_back(Association("chassis", "all_sensors", path));
             association = server.add_interface("/xyz/openbmc_project/sensors/" +
                                                    type + "/" + name,
                                                associationInterface);

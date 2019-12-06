@@ -17,6 +17,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/asio.hpp>
+#include <filesystem>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -120,13 +121,13 @@ void createSensors()
     // Global power statistics
     configuredSensors.push_back(std::make_unique<PowerMetric>(server));
     configuredSensors.push_back(std::make_unique<GlobalPowerPlatform>(
-        server, 0, 2040, "power", "total_power", globalPowerStats,
+        server, 0, 2040, "power", "Total_Power", globalPowerStats,
         entirePlatform, 0));
     configuredSensors.push_back(
-        std::make_unique<GlobalPowerCpu>(server, 0, 510, "power", "cpu_power",
+        std::make_unique<GlobalPowerCpu>(server, 0, 510, "power", "CPU_Power",
                                          globalPowerStats, cpuSubsystem, 0));
     configuredSensors.push_back(std::make_unique<GlobalPowerMemory>(
-        server, 0, 255, "power", "memory_power", globalPowerStats,
+        server, 0, 255, "power", "Memory_Power", globalPowerStats,
         memorySubsystem, 0));
 }
 
@@ -163,11 +164,12 @@ void createAssociations()
                     "sensor name");
                 return;
             }
-
+            std::string parentPath =
+                std::filesystem::path(subtree.front().first).parent_path();
             // Create associations for all configured sensors
             for (auto &sensor : configuredSensors)
             {
-                sensor->createAssociation(server, subtree.front().first);
+                sensor->createAssociation(server, parentPath);
             }
         },
         "xyz.openbmc_project.ObjectMapper",
