@@ -59,12 +59,20 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
      * xyz.openbmc_project.Software.Version. since these versions are already
      * active, so we should set "activation" to Active and
      * "RequestedActivation" to None. */
-    std::string activation =
-        (imgType == ImageType::bmcRecovery ||
-         imgType == ImageType::biosRecovery ||
-         imgType == ImageType::cpldRecovery)
-            ? "xyz.openbmc_project.Software.Activation.Activations.StandbySpare"
-            : "xyz.openbmc_project.Software.Activation.Activations.Active";
+    std::string activation;
+    if (imgType == ImageType::bmcRecovery ||
+        imgType == ImageType::biosRecovery ||
+        imgType == ImageType::cpldRecovery)
+    {
+        activation =
+            "xyz.openbmc_project.Software.Activation.Activations.StandbySpare";
+    }
+    else
+    {
+        activation =
+            "xyz.openbmc_project.Software.Activation.Activations.Active";
+    }
+
     std::string reqActNone =
         "xyz.openbmc_project.Software.Activation.RequestedActivations.None";
     auto activationIface = server.add_interface(
