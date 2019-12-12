@@ -329,7 +329,10 @@ int main()
     stateTimer = std::make_unique<boost::asio::steady_timer>(io);
     initTimer = std::make_unique<boost::asio::steady_timer>(io);
     conn->request_name("xyz.openbmc_project.PFR.Manager");
-    auto server = sdbusplus::asio::object_server(conn);
+    auto server = sdbusplus::asio::object_server(conn, true);
+    auto rootInterface = server.add_interface("/xyz/openbmc_project/pfr", "");
+    rootInterface->initialize();
+    server.add_manager("/xyz/openbmc_project/pfr");
 
     // Create PFR attributes object and interface
     pfrConfigObject = std::make_unique<intel::pfr::PfrConfig>(server, conn);
