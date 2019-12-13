@@ -277,44 +277,52 @@ void checkAndSetCheckpoint(sdbusplus::asio::object_server& server,
     conn->async_method_call(
         [&server, &conn](boost::system::error_code ec,
                          const std::variant<uint64_t>& value) {
-            if (ec)
+            if (!ec)
             {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "async_method_call error: FinishTimestamp failed");
-                return;
-            }
-            if (std::get<uint64_t>(value))
-            {
-                if (!finishedSettingChkPoint)
+                if (std::get<uint64_t>(value))
                 {
-                    finishedSettingChkPoint = true;
-                    intel::pfr::setBMCBootCheckpoint(bmcBootFinishedChkPoint);
+                    phosphor::logging::log<phosphor::logging::level::INFO>(
+                        "PFR: BMC boot completed. Setting checkpoint 9.");
+                    if (!finishedSettingChkPoint)
+                    {
+                        finishedSettingChkPoint = true;
+                        intel::pfr::setBMCBootCheckpoint(
+                            bmcBootFinishedChkPoint);
+                    }
+                    return;
                 }
             }
             else
             {
-                // FIX-ME: Latest up-stream sync caused issue in receiving
-                // StartupFinished signal. Unable to get StartupFinished signal
-                // from systemd1 hence using poll method too, to trigger it
-                // properly.
-                constexpr size_t pollTimeout = 10; // seconds
-                initTimer->expires_after(std::chrono::seconds(pollTimeout));
-                initTimer->async_wait([&server, &conn](
-                                          const boost::system::error_code& ec) {
-                    if (ec == boost::asio::error::operation_aborted)
-                    {
-                        // Timer reset.
-                        return;
-                    }
-                    if (ec)
-                    {
-                        phosphor::logging::log<phosphor::logging::level::ERR>(
-                            "Set boot Checkpoint - async wait error.");
-                        return;
-                    }
-                    checkAndSetCheckpoint(server, conn);
-                });
+                // Failed to get data from systemd. System might not
+                // be ready yet. Attempt again for data.
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "PFR: aync call failed to get FinishTimestamp.",
+                    phosphor::logging::entry("MSG=%s", ec.message().c_str()));
             }
+            // FIX-ME: Latest up-stream sync caused issue in receiving
+            // StartupFinished signal. Unable to get StartupFinished signal
+            // from systemd1 hence using poll method too, to trigger it
+            // properly.
+            constexpr size_t pollTimeout = 10; // seconds
+            initTimer->expires_after(std::chrono::seconds(pollTimeout));
+            initTimer->async_wait([&server,
+                                   &conn](const boost::system::error_code& ec) {
+                if (ec == boost::asio::error::operation_aborted)
+                {
+                    // Timer reset.
+                    phosphor::logging::log<phosphor::logging::level::INFO>(
+                        "PFR: Set boot Checkpoint - Timer aborted or stopped.");
+                    return;
+                }
+                if (ec)
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "PFR: Set boot Checkpoint - async wait error.");
+                    return;
+                }
+                checkAndSetCheckpoint(server, conn);
+            });
         },
         "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
         "org.freedesktop.DBus.Properties", "Get",
@@ -356,6 +364,9 @@ int main()
         [&server, &conn](sdbusplus::message::message& msg) {
             if (!finishedSettingChkPoint)
             {
+                phosphor::logging::log<phosphor::logging::level::INFO>(
+                    "PFR: BMC boot completed(StartupFinished). Setting "
+                    "checkpoint 9.");
                 finishedSettingChkPoint = true;
                 intel::pfr::setBMCBootCheckpoint(bmcBootFinishedChkPoint);
             }

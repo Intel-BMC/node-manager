@@ -99,6 +99,9 @@ class I2CFile
         int retries = 3;
         while (i2c_smbus_write_byte_data(fd, offset, value) < 0)
         {
+            phosphor::logging::log<phosphor::logging::level::WARNING>(
+                "PFR: I2c write failed, retrying....",
+                phosphor::logging::entry("COUNT=%d", retries));
             if (!retries--)
             {
                 throw std::runtime_error("i2c_smbus_write_byte_data() failed");

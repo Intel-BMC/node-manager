@@ -253,6 +253,8 @@ int setBMCBootCheckpoint(const uint8_t checkPoint)
     {
         I2CFile cpldDev(i2cBusNumber, i2cSlaveAddress, O_RDWR | O_CLOEXEC);
         cpldDev.i2cWriteByteData(bmcBootCheckpoint, checkPoint);
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "Successfully set the PFR CPLD checkpoint 9.");
         return 0;
     }
     catch (const std::exception& e)
