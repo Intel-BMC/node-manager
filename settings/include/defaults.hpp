@@ -17,6 +17,8 @@
 #pragma once
 #include "interface.hpp"
 
+using Association = std::tuple<std::string, std::string, std::string>;
+
 // this file is vendor specific, other vendors should replace this file using a
 // bbappend
 
@@ -172,10 +174,35 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("UUID", "00000000-0000-0000-0000-000000000000");
 
+    // TODO needs to remove the below BiosId after the refernce in ipmi oem is
+    // change to Version property
     setting = &settings.emplace_back(objectServer, "/xyz/openbmc_project/bios",
                                      "xyz.openbmc_project.Inventory.Item.Bios");
 
     setting->addProperty("BiosId", "NA");
+
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/software/bios",
+                                     "xyz.openbmc_project.Software.Version");
+    setting->addProperty("Version", "NA");
+    setting->addProperty(
+        "Purpose", "xyz.openbmc_project.Software.Version.VersionPurpose.Host");
+
+    setting = &settings.emplace_back(objectServer,
+                                     "/xyz/openbmc_project/software/bios",
+                                     "xyz.openbmc_project.Software.Activation");
+    setting->addProperty(
+        "Activation",
+        "xyz.openbmc_project.Software.Activation.Activations.Active");
+
+    std::vector<Association> associations;
+    associations.push_back(Association("functional", "software_version",
+                                       "/xyz/openbmc_project/software/bios"));
+
+    setting =
+        &settings.emplace_back(objectServer, "/xyz/openbmc_project/software",
+                               "xyz.openbmc_project.Association.Definitions");
+    setting->interface->register_property("Associations", associations);
 
     setting = &settings.emplace_back(
         objectServer, "/xyz/openbmc_project/control/processor_error_config",
