@@ -264,6 +264,13 @@ void SpecialModeMgr::updateTimer(int countInSeconds)
                 "Error in special mode timer");
             return;
         }
+#ifdef BMC_VALIDATION_UNSECURE_FEATURE
+        if (specialMode == secCtrl::SpecialMode::Modes::ValidationUnsecure)
+        {
+            // Don't reset, if in ValidationUnsecure mode
+            return;
+        }
+#endif
         iface->set_property(
             strSpecialMode,
             secCtrl::convertForMessage(secCtrl::SpecialMode::Modes::None));
