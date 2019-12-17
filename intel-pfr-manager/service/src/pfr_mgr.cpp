@@ -55,22 +55,28 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
 
     versionIface->initialize();
 
-    /* Activation interface represents activation state for an associated
-     * xyz.openbmc_project.Software.Version. since these versions are already
-     * active, so we should set "activation" to Active and
-     * "RequestedActivation" to None. */
-    std::string activation;
-    if (imgType == ImageType::bmcRecovery ||
-        imgType == ImageType::biosRecovery ||
-        imgType == ImageType::cpldRecovery)
+    std::string activation =
+        "xyz.openbmc_project.Software.Activation.Activations.StandbySpare";
+
+    if ((imgType == ImageType::bmcActive) ||
+        (imgType == ImageType::biosActive) ||
+        (imgType == ImageType::cpldActive))
     {
-        activation =
-            "xyz.openbmc_project.Software.Activation.Activations.StandbySpare";
-    }
-    else
-    {
+        // Running images so set Activations to "Active"
         activation =
             "xyz.openbmc_project.Software.Activation.Activations.Active";
+
+        /* For all Active images, functional endpoints must be added. This *
+         * will be used in bmcweb for showing active component versions. */
+        using Association = std::tuple<std::string, std::string, std::string>;
+        std::vector<Association> associations;
+        associations.push_back(
+            Association("functional", "software_version", objPath));
+        auto associationsIface =
+            server.add_interface("/xyz/openbmc_project/software",
+                                 "xyz.openbmc_project.Association.Definitions");
+        associationsIface->register_property("Associations", associations);
+        associationsIface->initialize();
     }
 
     std::string reqActNone =
