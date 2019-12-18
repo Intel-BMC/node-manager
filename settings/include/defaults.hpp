@@ -174,13 +174,6 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
 
     setting->addProperty("UUID", "00000000-0000-0000-0000-000000000000");
 
-    // TODO needs to remove the below BiosId after the refernce in ipmi oem is
-    // change to Version property
-    setting = &settings.emplace_back(objectServer, "/xyz/openbmc_project/bios",
-                                     "xyz.openbmc_project.Inventory.Item.Bios");
-
-    setting->addProperty("BiosId", "NA");
-
     setting = &settings.emplace_back(objectServer,
                                      "/xyz/openbmc_project/software/bios",
                                      "xyz.openbmc_project.Software.Version");
