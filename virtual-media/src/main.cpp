@@ -1,5 +1,6 @@
 #include "configuration.hpp"
 #include "logger.hpp"
+#include "state_machine.hpp"
 #include "system.hpp"
 
 #include <sys/mount.h>
@@ -40,12 +41,25 @@ class App
         objManager = std::make_shared<sdbusplus::server::manager::manager>(
             *bus, "/xyz/openbmc_project/VirtualMedia");
 
-        devMonitor.run([](const NBDDevice& device, StateChange change) {
-            // placeholder for some future actions
+        for (const auto& [name, entry] : config.mountPoints)
+        {
+            mpsm[name] = std::make_shared<MountPointStateMachine>(
+                ioc, devMonitor, name, entry);
+            mpsm[name]->emitRegisterDBusEvent(bus, objServer);
+        }
+
+        devMonitor.run([this](const NBDDevice& device, StateChange change) {
+            for (auto& [name, entry] : mpsm)
+            {
+                entry->emitUdevStateChangeEvent(device, change);
+            }
         });
     }
 
   private:
+    boost::container::flat_map<std::string,
+                               std::shared_ptr<MountPointStateMachine>>
+        mpsm;
     boost::asio::io_context& ioc;
     std::shared_ptr<sdbusplus::asio::connection> bus;
     std::shared_ptr<sdbusplus::asio::object_server> objServer;
