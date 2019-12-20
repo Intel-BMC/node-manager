@@ -1,4 +1,5 @@
 #include "logger.hpp"
+#include "system.hpp"
 
 #include <sys/mount.h>
 
@@ -19,7 +20,8 @@
 class App
 {
   public:
-    App(boost::asio::io_context& ioc, sd_bus* custom_bus = nullptr) : ioc(ioc)
+    App(boost::asio::io_context& ioc, sd_bus* custom_bus = nullptr) :
+        ioc(ioc), devMonitor(ioc)
     {
         if (!custom_bus)
         {
@@ -34,6 +36,10 @@ class App
         bus->request_name("xyz.openbmc_project.VirtualMedia");
         objManager = std::make_shared<sdbusplus::server::manager::manager>(
             *bus, "/xyz/openbmc_project/VirtualMedia");
+
+        devMonitor.run([](const NBDDevice& device, StateChange change) {
+            // placeholder for some future actions
+        });
     }
 
   private:
@@ -41,6 +47,7 @@ class App
     std::shared_ptr<sdbusplus::asio::connection> bus;
     std::shared_ptr<sdbusplus::asio::object_server> objServer;
     std::shared_ptr<sdbusplus::server::manager::manager> objManager;
+    DeviceMonitor devMonitor;
 };
 
 int main()
