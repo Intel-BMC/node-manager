@@ -1,3 +1,4 @@
+#include "configuration.hpp"
 #include "logger.hpp"
 #include "system.hpp"
 
@@ -20,8 +21,10 @@
 class App
 {
   public:
-    App(boost::asio::io_context& ioc, sd_bus* custom_bus = nullptr) :
-        ioc(ioc), devMonitor(ioc)
+    App(boost::asio::io_context& ioc, const Configuration& config,
+        sd_bus* custom_bus = nullptr) :
+        ioc(ioc),
+        devMonitor(ioc), config(config)
     {
         if (!custom_bus)
         {
@@ -48,10 +51,15 @@ class App
     std::shared_ptr<sdbusplus::asio::object_server> objServer;
     std::shared_ptr<sdbusplus::server::manager::manager> objManager;
     DeviceMonitor devMonitor;
+    const Configuration& config;
 };
 
 int main()
 {
+    Configuration config("/etc/virtual-media.json");
+    if (!config.valid)
+        return -1;
+
     boost::asio::io_context ioc;
     boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
     signals.async_wait(
@@ -66,7 +74,7 @@ int main()
     sd_bus_start(b);
 #endif
     sd_bus_default_system(&b);
-    App app(ioc, b);
+    App app(ioc, config, b);
 
     ioc.run();
 
