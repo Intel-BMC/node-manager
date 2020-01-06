@@ -418,7 +418,7 @@ class GetMeVer
              sdbusplus::asio::object_server &server) :
         conn(conn)
     {
-        iface = server.add_interface("/xyz/openbmc_project/me_version",
+        iface = server.add_interface("/xyz/openbmc_project/software/ME",
                                      nmdMeVerIntf);
 
         iface->register_property(
