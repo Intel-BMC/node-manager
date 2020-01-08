@@ -30,7 +30,9 @@ constexpr const char *nmdSensorIntf = "xyz.openbmc_project.Sensor.Value";
 constexpr const char *nmdPowerCapIntf = "xyz.openbmc_project.Control.Power.Cap";
 constexpr const char *nmdPowerMetricIntf =
     "xyz.openbmc_project.Power.PowerMetric";
-constexpr const char *nmdMeVerIntf = "xyz.openbmc_project.Software.Version";
+constexpr const char *softwareVerIntf = "xyz.openbmc_project.Software.Version";
+constexpr const char *softwareActivationIntf =
+    "xyz.openbmc_project.Software.Activation";
 
 constexpr const char *ipmbBus = "xyz.openbmc_project.Ipmi.Channel.Ipmb";
 constexpr const char *ipmbObj = "/xyz/openbmc_project/Ipmi/Channel/Ipmb";
@@ -419,7 +421,7 @@ class GetMeVer
         conn(conn)
     {
         iface = server.add_interface("/xyz/openbmc_project/software/ME",
-                                     nmdMeVerIntf);
+                                     softwareVerIntf);
 
         iface->register_property(
             "Purpose",
@@ -432,6 +434,24 @@ class GetMeVer
             [this](const std::string &val) { return getDevId(); });
 
         iface->initialize();
+
+        /* Activation interface represents activation state for an associated
+         * xyz.openbmc_project.Software.Version. since its are already active,
+         * set "activation" to Active and "RequestedActivation" to None.
+         */
+        auto activationIface = server.add_interface(
+            "/xyz/openbmc_project/software/ME", softwareActivationIntf);
+
+        activationIface->register_property(
+            "Activation",
+            std::string(
+                "xyz.openbmc_project.Software.Activation.Activations.Active"));
+        activationIface->register_property(
+            "RequestedActivation",
+            std::string("xyz.openbmc_project.Software.Activation."
+                        "RequestedActivations.None"));
+
+        activationIface->initialize();
     }
 
     std::string getDevId()
