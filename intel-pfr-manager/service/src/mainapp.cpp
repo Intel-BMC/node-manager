@@ -329,31 +329,9 @@ void checkAndSetCheckpoint(sdbusplus::asio::object_server& server,
         "org.freedesktop.systemd1.Manager", "FinishTimestamp");
 }
 
-int main()
+void monitorSignals(sdbusplus::asio::object_server& server,
+                    std::shared_ptr<sdbusplus::asio::connection>& conn)
 {
-    // setup connection to dbus
-    boost::asio::io_service io;
-    auto conn = std::make_shared<sdbusplus::asio::connection>(io);
-    stateTimer = std::make_unique<boost::asio::steady_timer>(io);
-    initTimer = std::make_unique<boost::asio::steady_timer>(io);
-    conn->request_name("xyz.openbmc_project.PFR.Manager");
-    auto server = sdbusplus::asio::object_server(conn, true);
-    auto rootInterface = server.add_interface("/xyz/openbmc_project/pfr", "");
-    rootInterface->initialize();
-    server.add_manager("/xyz/openbmc_project/pfr");
-
-    // Create PFR attributes object and interface
-    pfrConfigObject = std::make_unique<intel::pfr::PfrConfig>(server, conn);
-
-    pfrVersionObjects.clear();
-    // Create Software objects using Versions interface
-    for (const auto& entry : verComponentList)
-    {
-        pfrVersionObjects.emplace_back(std::make_unique<intel::pfr::PfrVersion>(
-            server, conn, std::get<0>(entry), std::get<1>(entry),
-            std::get<2>(entry)));
-    }
-
     // Monitor Boot finished signal and set the checkpoint 9 to
     // notify CPLD about BMC boot finish.
     auto bootFinishedSignal = std::make_unique<sdbusplus::bus::match::match>(
@@ -501,10 +479,36 @@ int main()
 
     // First time, check and log events if any.
     checkAndLogEvents();
+}
 
+int main()
+{
+    // setup connection to dbus
+    boost::asio::io_service io;
+    auto conn = std::make_shared<sdbusplus::asio::connection>(io);
+    stateTimer = std::make_unique<boost::asio::steady_timer>(io);
+    initTimer = std::make_unique<boost::asio::steady_timer>(io);
+    auto server = sdbusplus::asio::object_server(conn, true);
+    monitorSignals(server, conn);
+
+    auto rootInterface = server.add_interface("/xyz/openbmc_project/pfr", "");
+    rootInterface->initialize();
+    server.add_manager("/xyz/openbmc_project/pfr");
+
+    // Create PFR attributes object and interface
+    pfrConfigObject = std::make_unique<intel::pfr::PfrConfig>(server, conn);
+
+    // Create Software objects using Versions interface
+    for (const auto& entry : verComponentList)
+    {
+        pfrVersionObjects.emplace_back(std::make_unique<intel::pfr::PfrVersion>(
+            server, conn, std::get<0>(entry), std::get<1>(entry),
+            std::get<2>(entry)));
+    }
+
+    conn->request_name("xyz.openbmc_project.PFR.Manager");
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Intel PFR service started successfully");
-
     io.run();
 
     return 0;
