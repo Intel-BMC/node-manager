@@ -13,6 +13,7 @@
 #include <optional>
 #include <sdbusplus/asio/object_server.hpp>
 #include <stdexcept>
+#include <system_error>
 #include <variant>
 
 struct MountPointStateMachine
@@ -22,6 +23,12 @@ struct MountPointStateMachine
         InvalidStateError(const char* what) : std::runtime_error(what)
         {
         }
+    };
+
+    struct Error
+    {
+        std::errc code;
+        std::string message;
     };
 
     struct BasicState
@@ -75,6 +82,15 @@ struct MountPointStateMachine
     {
         ReadyState(const BasicState& state) : BasicState(state, __FUNCTION__){};
 
+        ReadyState(const BasicState& state, const std::errc& ec,
+                   const std::string& message) :
+            BasicState(state, __FUNCTION__),
+            error{{ec, message}}
+        {
+            LogMsg(Logger::Error, state.machine.name,
+                   " Errno = ", static_cast<int>(ec), " : ", message);
+        };
+
         virtual void onEnter()
         {
             if (machine.target)
@@ -90,6 +106,8 @@ struct MountPointStateMachine
 
             machine.config.remainingInactivityTimeout = std::chrono::seconds(0);
         }
+
+        std::optional<Error> error;
     };
 
     struct ActivatingState : public BasicState
@@ -412,8 +430,14 @@ struct MountPointStateMachine
                 int waitCnt = 120;
                 while (waitCnt > 0)
                 {
-                    if (std::get_if<ReadyState>(&machine.state))
+                    if (auto s = std::get_if<ReadyState>(&machine.state))
                     {
+                        if (s->error)
+                        {
+                            throw sdbusplus::exception::SdBusError(
+                                static_cast<int>(s->error->code),
+                                s->error->message.c_str());
+                        }
                         return false;
                     }
                     if (std::get_if<ActiveState>(&machine.state))
@@ -497,7 +521,8 @@ struct MountPointStateMachine
         {
             if (!state.machine.removeUsbGadget(state))
             {
-                return ReadyState(state);
+                return ReadyState(state, std::errc::device_or_resource_busy,
+                                  "Unable to unmount gadget");
             }
             state.machine.stopProcess(state.process);
             return WaitingForProcessEndState(state);
@@ -524,13 +549,15 @@ struct MountPointStateMachine
         State operator()(const WaitingForGadgetState& state)
         {
             state.machine.stopProcess(state.process);
-            return ReadyState(state);
+            return ReadyState(state, std::errc::io_error,
+                              "Process ended prematurely");
         }
         State operator()(const ActiveState& state)
         {
             if (!state.machine.removeUsbGadget(state))
             {
-                return ReadyState(state);
+                return ReadyState(state, std::errc::device_or_resource_busy,
+                                  "Unable to unmount gadget");
             }
             return ReadyState(state);
         }
@@ -561,9 +588,8 @@ struct MountPointStateMachine
                 "/usr/sbin/nbd-client", state.machine.config.nbdDevice);
             if (!process)
             {
-                LogMsg(Logger::Error, state.machine.name,
-                       " Failed to create Process for: ", state.machine.name);
-                return ReadyState(state);
+                return ReadyState(state, std::errc::operation_canceled,
+                                  "Failed to allocate process");
             }
             if (!process->spawn(
                     Configuration::MountPoint::toArgs(state.machine.config),
@@ -572,9 +598,8 @@ struct MountPointStateMachine
                         machine.emitSubprocessStoppedEvent();
                     }))
             {
-                LogMsg(Logger::Error, state.machine.name,
-                       " Failed to spawn Process for: ", state.machine.name);
-                return ReadyState(state);
+                return ReadyState(state, std::errc::operation_canceled,
+                                  "Failed to spawn process");
             }
             auto newState = WaitingForGadgetState(state);
             newState.process = process;
@@ -597,8 +622,8 @@ struct MountPointStateMachine
                 return mountHttpsShare(state);
             }
 
-            LogMsg(Logger::Error, state.machine.name, " URL not recognized");
-            return ReadyState(state);
+            return ReadyState(state, std::errc::invalid_argument,
+                              "URL not recognized");
         }
 
         State mountSmbShare(const ActivatingState& state)
@@ -606,7 +631,8 @@ struct MountPointStateMachine
             auto mountDir = SmbShare::createMountDir(state.machine.name);
             if (!mountDir)
             {
-                return ReadyState(state);
+                return ReadyState(state, std::errc::io_error,
+                                  "Failed to create mount directory");
             }
 
             SmbShare smb(*mountDir);
@@ -621,14 +647,16 @@ struct MountPointStateMachine
             if (!smb.mount(remoteParent, state.machine.target->rw))
             {
                 fs::remove_all(*mountDir);
-                return ReadyState(state);
+                return ReadyState(state, std::errc::invalid_argument,
+                                  "Failed to mount CIFS share");
             }
 
             auto process = spawnNbdKit(state.machine, localFile);
             if (!process)
             {
                 SmbShare::unmount(*mountDir);
-                return ReadyState(state);
+                return ReadyState(state, std::errc::operation_canceled,
+                                  "Unable to setup NbdKit");
             }
 
             auto newState = WaitingForGadgetState(state);
@@ -645,7 +673,8 @@ struct MountPointStateMachine
             auto process = spawnNbdKit(machine, machine.target->imgUrl);
             if (!process)
             {
-                return ReadyState(state);
+                return ReadyState(state, std::errc::invalid_argument,
+                                  "Failed to mount HTTPS share");
             }
 
             auto newState = WaitingForGadgetState(state);
@@ -837,9 +866,12 @@ struct MountPointStateMachine
                 {
                     return ActiveState(state);
                 }
-                return ReadyState(state);
+                return ReadyState(state, std::errc::device_or_resource_busy,
+                                  "Unable to configure gadget");
             }
-            return ReadyState(state);
+            return ReadyState(state, std::errc::operation_not_supported,
+                              "Unexpected udev event: " +
+                                  static_cast<int>(devState));
         }
 
         State operator()(const ReadyState& state)
