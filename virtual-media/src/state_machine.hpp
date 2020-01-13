@@ -4,6 +4,7 @@
 #include "logger.hpp"
 #include "smb.hpp"
 #include "system.hpp"
+#include "utils.hpp"
 
 #include <sys/mount.h>
 
@@ -455,15 +456,68 @@ struct MountPointStateMachine
             // Mount specialization
             if (isLegacy)
             {
+                using sdbusplus::message::unix_fd;
+                using optional_fd = std::variant<int, unix_fd>;
+
                 iface->register_method(
-                    "Mount", [& machine = state.machine, this,
-                              handleMount](boost::asio::yield_context yield,
-                                           std::string imgUrl, bool rw) {
+                    "Mount", [& machine = state.machine, this, handleMount](
+                                 boost::asio::yield_context yield,
+                                 std::string imgUrl, bool rw, optional_fd fd) {
                         LogMsg(Logger::Info, "[App]: Mount called on ",
                                getObjectPath(machine), machine.name);
 
                         machine.target = {imgUrl, rw};
-                        return handleMount(yield, machine);
+
+                        if (std::holds_alternative<unix_fd>(fd))
+                        {
+                            LogMsg(Logger::Debug, "[App] Extra data available");
+
+                            // Open pipe and prepare output buffer
+                            boost::asio::posix::stream_descriptor secretPipe(
+                                machine.ioc.get(),
+                                dup(std::get<unix_fd>(fd).fd));
+                            std::array<char, utils::secretLimit> buf;
+
+                            // Read data
+                            auto size = secretPipe.async_read_some(
+                                boost::asio::buffer(buf), yield);
+
+                            // Validate number of NULL delimiters, ensures
+                            // further operations are safe
+                            auto nullCount = std::count(
+                                buf.begin(), buf.begin() + size, '\0');
+                            if (nullCount != 2)
+                            {
+                                throw sdbusplus::exception::SdBusError(
+                                    EINVAL, "Malformed extra data");
+                            }
+
+                            // First 'part' of payload
+                            std::string user(buf.begin());
+                            // Second 'part', after NULL delimiter
+                            std::string pass(buf.begin() + user.length() + 1);
+
+                            // Encapsulate credentials into safe buffer
+                            machine.target->credentials =
+                                std::make_unique<utils::CredentialsProvider>(
+                                    std::move(user), std::move(pass));
+
+                            // Cover the tracks
+                            utils::secureCleanup(buf);
+                        }
+
+                        try
+                        {
+                            auto ret = handleMount(yield, machine);
+                            machine.target->credentials.reset();
+                            return ret;
+                        }
+                        catch (...)
+                        {
+                            machine.target->credentials.reset();
+                            throw;
+                            return false;
+                        }
                     });
             }
             else
@@ -644,7 +698,8 @@ struct MountPointStateMachine
                    "\n Remote parent: ", remoteParent,
                    "\n Local file: ", localFile);
 
-            if (!smb.mount(remoteParent, state.machine.target->rw))
+            if (!smb.mount(remoteParent, state.machine.target->rw,
+                           state.machine.target->credentials))
             {
                 fs::remove_all(*mountDir);
                 return ReadyState(state, std::errc::invalid_argument,
@@ -684,6 +739,7 @@ struct MountPointStateMachine
 
         static std::shared_ptr<Process>
             spawnNbdKit(MountPointStateMachine& machine,
+                        std::unique_ptr<utils::VolatileFile>&& secret,
                         const std::vector<std::string>& params)
         {
             // Investigate
@@ -740,7 +796,8 @@ struct MountPointStateMachine
             args.insert(args.end(), params.begin(), params.end());
 
             if (!process->spawn(
-                    args, [& machine = machine](int exitCode, bool isReady) {
+                    args, [& machine = machine, secret = std::move(secret)](
+                              int exitCode, bool isReady) {
                         LogMsg(Logger::Info, machine.name, " process ended.");
                         machine.emitSubprocessStoppedEvent();
                     }))
@@ -756,24 +813,43 @@ struct MountPointStateMachine
         static std::shared_ptr<Process>
             spawnNbdKit(MountPointStateMachine& machine, const fs::path& file)
         {
-            return spawnNbdKit(machine, {// Use file plugin ...
-                                         "file",
-                                         // ... to mount file at this location
-                                         "file=" + file.string()});
+            return spawnNbdKit(machine, {},
+                               {// Use file plugin ...
+                                "file",
+                                // ... to mount file at this location
+                                "file=" + file.string()});
         }
 
         static std::shared_ptr<Process>
             spawnNbdKit(MountPointStateMachine& machine, const std::string& url)
         {
+            std::unique_ptr<utils::VolatileFile> secret;
             std::vector<std::string> params = {
                 // Use curl plugin ...
                 "curl",
                 // ... to mount http resource at url
                 "url=" + url};
 
-            // TODO: Authorization support in future patch
+            // Authenticate if needed
+            if (machine.target->credentials)
+            {
+                // Pack password into buffer
+                utils::CredentialsProvider::SecureBuffer buff =
+                    machine.target->credentials->pack(
+                        [](const std::string& user, const std::string& pass,
+                           std::vector<char>& buff) {
+                            std::copy(pass.begin(), pass.end(),
+                                      std::back_inserter(buff));
+                        });
 
-            return spawnNbdKit(machine, params);
+                // Prepare file to provide the password with
+                secret = std::make_unique<utils::VolatileFile>(std::move(buff));
+
+                params.push_back("user=" + machine.target->credentials->user());
+                params.push_back("password=+" + secret->path());
+            }
+
+            return spawnNbdKit(machine, std::move(secret), params);
         }
 
         bool checkUrl(const std::string& urlScheme, const std::string& imageUrl)
@@ -939,6 +1015,7 @@ struct MountPointStateMachine
             name = std::move(machine.name);
             ioc = machine.ioc;
             config = std::move(machine.config);
+            target = std::move(machine.target);
         }
         return *this;
     }
@@ -999,6 +1076,7 @@ struct MountPointStateMachine
         std::string imgUrl;
         bool rw;
         std::optional<fs::path> mountDir;
+        std::unique_ptr<utils::CredentialsProvider> credentials;
     };
 
     std::reference_wrapper<boost::asio::io_context> ioc;
