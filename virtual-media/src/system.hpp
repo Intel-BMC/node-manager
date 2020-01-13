@@ -582,4 +582,21 @@ struct UsbGadget
         }
         return -1;
     }
+
+    static std::optional<std::string> getStats(const std::string& name)
+    {
+        const fs::path statsPath =
+            "/sys/kernel/config/usb_gadget/mass-storage-" + name +
+            "/functions/mass_storage.usb0/lun.0/stats";
+
+        std::ifstream ifs(statsPath);
+        if (!ifs.is_open())
+        {
+            LogMsg(Logger::Error, name, "Failed to open ", statsPath);
+            return {};
+        }
+
+        return std::string{std::istreambuf_iterator<char>(ifs),
+                           std::istreambuf_iterator<char>()};
+    }
 };

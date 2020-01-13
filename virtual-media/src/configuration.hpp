@@ -34,6 +34,7 @@ class Configuration
         std::string endPointId;
         std::optional<int> timeout;
         std::optional<int> blocksize;
+        std::chrono::seconds remainingInactivityTimeout;
         Mode mode;
 
         static std::vector<std::string> toArgs(const MountPoint& mp)
@@ -59,6 +60,7 @@ class Configuration
 
     bool valid = false;
     boost::container::flat_map<std::string, MountPoint> mountPoints;
+    static std::chrono::seconds inactivityTimeout;
 
     Configuration(const std::string& file)
     {
@@ -94,6 +96,13 @@ class Configuration
 
     bool setupVariables(const nlohmann::json& config)
     {
+        inactivityTimeout =
+            std::chrono::seconds(config.value("InactivityTimeout", 0));
+        if (inactivityTimeout == std::chrono::seconds(0))
+        {
+            LogMsg(Logger::Error, "InactivityTimeout required, not set");
+        }
+
         for (const auto& item : config.items())
         {
             if (item.key() == "MountPoints")

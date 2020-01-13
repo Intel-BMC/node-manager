@@ -19,6 +19,8 @@
 #include <sdbusplus/asio/connection.hpp>
 #include <sdbusplus/asio/object_server.hpp>
 
+std::chrono::seconds Configuration::inactivityTimeout;
+
 class App
 {
   public:

@@ -80,6 +80,8 @@ struct MountPointStateMachine
             {
                 machine.target.reset();
             }
+
+            machine.config.remainingInactivityTimeout = std::chrono::seconds(0);
         }
     };
 
@@ -115,6 +117,58 @@ struct MountPointStateMachine
             BasicState(state, __FUNCTION__), process{state.process} {};
 
         std::weak_ptr<Process> process;
+
+        virtual void onEnter()
+        {
+            timer =
+                std::make_shared<boost::asio::steady_timer>(machine.ioc.get());
+            handler = [this](const boost::system::error_code& ec) {
+                if (ec)
+                {
+                    return;
+                }
+
+                auto now = std::chrono::steady_clock::now();
+
+                auto stats = UsbGadget::getStats(machine.name);
+                if (stats && (*stats != lastStats))
+                {
+                    lastStats = std::move(*stats);
+                    lastAccess = now;
+                }
+
+                auto timeSinceLastAccess =
+                    std::chrono::duration_cast<std::chrono::seconds>(
+                        now - lastAccess);
+                if (timeSinceLastAccess >= Configuration::inactivityTimeout)
+                {
+                    LogMsg(Logger::Info, machine.name,
+                           " Inactivity timer expired (",
+                           Configuration::inactivityTimeout.count(),
+                           "s) - Unmounting");
+                    // unmount media & stop retriggering timer
+                    machine.emitUnmountEvent();
+                    return;
+                }
+                else
+                {
+                    machine.config.remainingInactivityTimeout =
+                        Configuration::inactivityTimeout - timeSinceLastAccess;
+                }
+
+                timer->expires_from_now(std::chrono::seconds(1));
+                timer->async_wait(handler);
+            };
+            timer->expires_from_now(std::chrono::seconds(1));
+            timer->async_wait(handler);
+        }
+
+      private:
+        // timer wrapped in shared_ptr to allow making state copies
+        std::shared_ptr<boost::asio::steady_timer> timer;
+        std::function<void(const boost::system::error_code&)> handler;
+        std::chrono::time_point<std::chrono::steady_clock> lastAccess;
+        std::string lastStats;
     };
 
     struct WaitingForProcessEndState : public BasicState
@@ -278,6 +332,18 @@ struct MountPointStateMachine
             iface->register_property("EndpointId",
                                      state.machine.config.endPointId);
             iface->register_property("Socket", state.machine.config.unixSocket);
+            iface->register_property(
+                "RemainingInactivityTimeout", 0,
+                [](const int& req, int& property) {
+                    throw sdbusplus::exception::SdBusError(
+                        EPERM, "Setting RemainingInactivityTimeout property is "
+                               "not allowed");
+                    return -1;
+                },
+                [& config = state.machine.config](const int& property) -> int {
+                    return config.remainingInactivityTimeout.count();
+                });
+
             iface->initialize();
         }
 
