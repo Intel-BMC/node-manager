@@ -349,9 +349,9 @@ class Process : public std::enable_shared_from_this<Process>
 {
   public:
     Process(boost::asio::io_context& ioc, const std::string& name,
-            const NBDDevice& dev) :
+            const std::string& app, const NBDDevice& dev) :
         ioc(ioc),
-        pipe(ioc), name(name), dev(dev)
+        pipe(ioc), name(name), app(app), dev(dev)
     {
     }
 
@@ -359,9 +359,9 @@ class Process : public std::enable_shared_from_this<Process>
     bool spawn(const std::vector<std::string>& args, ExitCb&& onExit)
     {
         std::error_code ec;
-        LogMsg(Logger::Info, "[Process]: Spawning nbd-client (", args, ")");
+        LogMsg(Logger::Info, "[Process]: Spawning ", app, " (", args, ")");
         child = boost::process::child(
-            "/usr/sbin/nbd-client", boost::process::args(args),
+            app, boost::process::args(args),
             (boost::process::std_out & boost::process::std_err) > pipe, ec,
             ioc);
 
@@ -459,11 +459,17 @@ class Process : public std::enable_shared_from_this<Process>
         });
     }
 
+    std::string application()
+    {
+        return app;
+    }
+
   private:
     boost::asio::io_context& ioc;
     boost::process::child child;
     boost::process::async_pipe pipe;
     std::string name;
+    std::string app;
     const NBDDevice& dev;
 };
 
@@ -483,13 +489,13 @@ struct UsbGadget
 
   public:
     static int32_t configure(const std::string& name, const NBDDevice& nbd,
-                             StateChange change)
+                             StateChange change, const bool rw = false)
     {
-        return configure(name, nbd.to_path(), change);
+        return configure(name, nbd.to_path(), change, rw);
     }
 
     static int32_t configure(const std::string& name, const fs::path& path,
-                             StateChange change)
+                             StateChange change, const bool rw = false)
     {
         LogMsg(Logger::Info, "[App]: Configure USB Gadget (name=", name,
                ", path=", path, ", State=", static_cast<uint32_t>(change), ")");
@@ -528,7 +534,7 @@ struct UsbGadget
                 fs::create_directory_symlink(funcMassStorageDir,
                                              massStorageDir);
                 echoToFile(funcMassStorageDir / "lun.0/removable", "1");
-                echoToFile(funcMassStorageDir / "lun.0/ro", "1");
+                echoToFile(funcMassStorageDir / "lun.0/ro", rw ? "0" : "1");
                 echoToFile(funcMassStorageDir / "lun.0/cdrom", "0");
                 echoToFile(funcMassStorageDir / "lun.0/file", path);
 

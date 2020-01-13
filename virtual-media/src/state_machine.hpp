@@ -2,6 +2,7 @@
 
 #include "configuration.hpp"
 #include "logger.hpp"
+#include "smb.hpp"
 #include "system.hpp"
 
 #include <sys/mount.h>
@@ -78,6 +79,12 @@ struct MountPointStateMachine
         {
             if (machine.target)
             {
+                // Cleanup after previously mounted device
+                if (machine.target->mountDir)
+                {
+                    SmbShare::unmount(*machine.target->mountDir);
+                }
+
                 machine.target.reset();
             }
 
@@ -431,7 +438,7 @@ struct MountPointStateMachine
                         LogMsg(Logger::Info, "[App]: Mount called on ",
                                getObjectPath(machine), machine.name);
 
-                        machine.target = {imgUrl};
+                        machine.target = {imgUrl, rw};
                         return handleMount(yield, machine);
                     });
             }
@@ -551,7 +558,7 @@ struct MountPointStateMachine
         {
             auto process = std::make_shared<Process>(
                 state.machine.ioc.get(), state.machine.name,
-                state.machine.config.nbdDevice);
+                "/usr/sbin/nbd-client", state.machine.config.nbdDevice);
             if (!process)
             {
                 LogMsg(Logger::Error, state.machine.name,
@@ -576,32 +583,168 @@ struct MountPointStateMachine
 
         State activateLegacyMode(const ActivatingState& state)
         {
-            // Check if imgUrl is not emptry
+            LogMsg(
+                Logger::Debug, state.machine.name,
+                " Mount requested on address: ", state.machine.target->imgUrl,
+                " ; RW: ", state.machine.target->rw);
+
             if (isCifsUrl(state.machine.target->imgUrl))
             {
-                auto newState = ActiveState(state);
-
-                return newState;
+                return mountSmbShare(state);
             }
-            else
+            else if (isHttpsUrl(state.machine.target->imgUrl))
             {
-                throw sdbusplus::exception::SdBusError(
-                    EINVAL, "Not supported url's scheme.");
+                return mountHttpsShare(state);
             }
+
+            LogMsg(Logger::Error, state.machine.name, " URL not recognized");
+            return ReadyState(state);
         }
 
-        int prepareTempDirForLegacyMode(std::string& path)
+        State mountSmbShare(const ActivatingState& state)
         {
-            int result = -1;
-            char mountPathTemplate[] = "/tmp/vm_legacy.XXXXXX";
-            const char* tmpPath = mkdtemp(mountPathTemplate);
-            if (tmpPath != nullptr)
+            auto mountDir = SmbShare::createMountDir(state.machine.name);
+            if (!mountDir)
             {
-                path = tmpPath;
-                result = 0;
+                return ReadyState(state);
             }
 
-            return result;
+            SmbShare smb(*mountDir);
+            fs::path remote = getImagePath(state.machine.target->imgUrl);
+            auto remoteParent = "/" + remote.parent_path().string();
+            auto localFile = *mountDir / remote.filename();
+
+            LogMsg(Logger::Debug, state.machine.name, " Remote name: ", remote,
+                   "\n Remote parent: ", remoteParent,
+                   "\n Local file: ", localFile);
+
+            if (!smb.mount(remoteParent, state.machine.target->rw))
+            {
+                fs::remove_all(*mountDir);
+                return ReadyState(state);
+            }
+
+            auto process = spawnNbdKit(state.machine, localFile);
+            if (!process)
+            {
+                SmbShare::unmount(*mountDir);
+                return ReadyState(state);
+            }
+
+            auto newState = WaitingForGadgetState(state);
+            newState.process = process;
+            newState.machine.target->mountDir = *mountDir;
+
+            return newState;
+        }
+
+        State mountHttpsShare(const ActivatingState& state)
+        {
+            auto& machine = state.machine;
+
+            auto process = spawnNbdKit(machine, machine.target->imgUrl);
+            if (!process)
+            {
+                return ReadyState(state);
+            }
+
+            auto newState = WaitingForGadgetState(state);
+            newState.process = process;
+            return newState;
+        }
+
+        static std::shared_ptr<Process>
+            spawnNbdKit(MountPointStateMachine& machine,
+                        const std::vector<std::string>& params)
+        {
+            // Investigate
+            auto process = std::make_shared<Process>(
+                machine.ioc.get(), machine.name, "/usr/sbin/nbdkit",
+                machine.config.nbdDevice);
+            if (!process)
+            {
+                LogMsg(Logger::Error, machine.name,
+                       " Failed to create Process for: ", machine.name);
+                return {};
+            }
+
+            // Cleanup of previous socket
+            if (fs::exists(machine.config.unixSocket))
+            {
+                LogMsg(Logger::Debug, machine.name,
+                       " Removing previously mounted socket: ",
+                       machine.config.unixSocket);
+                if (!fs::remove(machine.config.unixSocket))
+                {
+                    LogMsg(Logger::Error, machine.name,
+                           " Unable to remove pre-existing socket :",
+                           machine.config.unixSocket);
+                    return {};
+                }
+            }
+
+            std::string nbd_client =
+                "/usr/sbin/nbd-client " +
+                boost::algorithm::join(
+                    Configuration::MountPoint::toArgs(machine.config), " ");
+
+            std::vector<std::string> args = {
+                // Listen for client on this unix socket...
+                "--unix",
+                machine.config.unixSocket,
+
+                // ... then connect nbd-client to served image
+                "--run",
+                nbd_client,
+
+#if VM_VERBOSE_NBDKIT_LOGS
+                "--verbose", // swarm of debug logs - only for brave souls
+#endif
+            };
+
+            if (!machine.target->rw)
+            {
+                args.push_back("--readonly");
+            }
+
+            // Insert extra params
+            args.insert(args.end(), params.begin(), params.end());
+
+            if (!process->spawn(
+                    args, [& machine = machine](int exitCode, bool isReady) {
+                        LogMsg(Logger::Info, machine.name, " process ended.");
+                        machine.emitSubprocessStoppedEvent();
+                    }))
+            {
+                LogMsg(Logger::Error, machine.name,
+                       " Failed to spawn Process for: ", machine.name);
+                return {};
+            }
+
+            return process;
+        }
+
+        static std::shared_ptr<Process>
+            spawnNbdKit(MountPointStateMachine& machine, const fs::path& file)
+        {
+            return spawnNbdKit(machine, {// Use file plugin ...
+                                         "file",
+                                         // ... to mount file at this location
+                                         "file=" + file.string()});
+        }
+
+        static std::shared_ptr<Process>
+            spawnNbdKit(MountPointStateMachine& machine, const std::string& url)
+        {
+            std::vector<std::string> params = {
+                // Use curl plugin ...
+                "curl",
+                // ... to mount http resource at url
+                "url=" + url};
+
+            // TODO: Authorization support in future patch
+
+            return spawnNbdKit(machine, params);
         }
 
         bool checkUrl(const std::string& urlScheme, const std::string& imageUrl)
@@ -688,7 +831,8 @@ struct MountPointStateMachine
             {
                 int32_t ret = UsbGadget::configure(
                     state.machine.name, state.machine.config.nbdDevice,
-                    devState);
+                    devState,
+                    state.machine.target ? state.machine.target->rw : false);
                 if (ret == 0)
                 {
                     return ActiveState(state);
@@ -821,6 +965,8 @@ struct MountPointStateMachine
     struct Target
     {
         std::string imgUrl;
+        bool rw;
+        std::optional<fs::path> mountDir;
     };
 
     std::reference_wrapper<boost::asio::io_context> ioc;

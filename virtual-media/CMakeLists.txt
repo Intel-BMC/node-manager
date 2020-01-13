@@ -17,6 +17,8 @@ option(YOCTO_DEPENDENCIES "Use YOCTO dependencies system" OFF)
 
 option(VM_USE_VALGRIND "Build VirtualMedia to work with valgrind" OFF)
 
+option(VM_VERBOSE_NBDKIT_LOGS "Include detailed logs from nbdkit" OFF)
+
 if(NOT ${YOCTO_DEPENDENCIES})
   include(ExternalProject)
 
@@ -133,6 +135,8 @@ target_compile_definitions(virtual-media
                            PRIVATE
                            $<$<BOOL:${VM_USE_VALGRIND}>:
                            -DBOOST_USE_VALGRIND>
+                           $<$<BOOL:${VM_VERBOSE_NBDKIT_LOGS}>:
+                           -DVM_VERBOSE_NBDKIT_LOGS>
                            $<$<BOOL:${CUSTOM_DBUS_PATH}>:
                            -DCUSTOM_DBUS_PATH="${CUSTOM_DBUS_PATH}">)
 

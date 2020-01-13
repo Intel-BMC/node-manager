@@ -20,11 +20,18 @@
         "USB1": {
             "EndpointId": "",
             "Mode": 1,
-            "NBDDevice": "",
-            "UnixSocket": "",
-            "Timeout": 0,
-            "BlockSize": 0
+            "NBDDevice": "nbd2",
+            "UnixSocket": "/tmp/nbd2.sock",
+            "Timeout": 30,
+            "BlockSize": 512
+        },
+        "USB2": {
+            "EndpointId": "",
+            "Mode": 1,
+            "NBDDevice": "nbd3",
+            "UnixSocket": "/tmp/nbd3.sock",
+            "Timeout": 30,
+            "BlockSize": 512
         }
     }
 }
-
