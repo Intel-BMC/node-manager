@@ -30,6 +30,7 @@ constexpr const char *nmdSensorIntf = "xyz.openbmc_project.Sensor.Value";
 constexpr const char *nmdPowerCapIntf = "xyz.openbmc_project.Control.Power.Cap";
 constexpr const char *nmdPowerMetricIntf =
     "xyz.openbmc_project.Power.PowerMetric";
+constexpr const char *meSoftwareObjPath = "/xyz/openbmc_project/software/me";
 constexpr const char *softwareVerIntf = "xyz.openbmc_project.Software.Version";
 constexpr const char *softwareActivationIntf =
     "xyz.openbmc_project.Software.Activation";
@@ -420,8 +421,7 @@ class GetMeVer
              sdbusplus::asio::object_server &server) :
         conn(conn)
     {
-        iface = server.add_interface("/xyz/openbmc_project/software/ME",
-                                     softwareVerIntf);
+        iface = server.add_interface(meSoftwareObjPath, softwareVerIntf);
 
         iface->register_property(
             "Purpose",
@@ -439,8 +439,8 @@ class GetMeVer
          * xyz.openbmc_project.Software.Version. since its are already active,
          * set "activation" to Active and "RequestedActivation" to None.
          */
-        auto activationIface = server.add_interface(
-            "/xyz/openbmc_project/software/ME", softwareActivationIntf);
+        auto activationIface =
+            server.add_interface(meSoftwareObjPath, softwareActivationIntf);
 
         activationIface->register_property(
             "Activation",
@@ -452,6 +452,15 @@ class GetMeVer
                         "RequestedActivations.None"));
 
         activationIface->initialize();
+
+        /* For all Active images, functional endpoints must be added. */
+        std::vector<Association> associations;
+        associations.push_back(
+            Association("functional", "software_version", meSoftwareObjPath));
+        auto associationsIface = server.add_interface(
+            "/xyz/openbmc_project/software", associationInterface);
+        associationsIface->register_property("Associations", associations);
+        associationsIface->initialize();
     }
 
     std::string getDevId()
