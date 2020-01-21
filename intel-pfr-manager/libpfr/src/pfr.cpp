@@ -80,8 +80,9 @@ static std::string readVersionFromCPLD(const uint8_t majorReg,
         I2CFile cpldDev(i2cBusNumber, i2cSlaveAddress, O_RDWR | O_CLOEXEC);
         uint8_t majorVer = cpldDev.i2cReadByteData(majorReg);
         uint8_t minorVer = cpldDev.i2cReadByteData(minorReg);
+        // Major and Minor versions should be binary encoded strings.
         std::string version =
-            toHexString(majorVer) + "." + toHexString(minorVer);
+            std::to_string(majorVer) + "." + std::to_string(minorVer);
         return version;
     }
     catch (const std::exception& e)
@@ -142,12 +143,14 @@ static std::string readBMCVersionFromSPI(const ImageType& imgType)
             phosphor::logging::entry("MSG=%s", e.what()));
         return "";
     }
-    // Version format: <major>.<minor>-<build bum>-<build hash>
-    // Example: 00.11-07-1e5c2d
-    std::string version = toHexString(ver[0]) + "." + toHexString(ver[1]) +
-                          "-" + toHexString(buildNo) + "-" +
-                          toHexString(buildHash[0]) +
-                          toHexString(buildHash[1]) + toHexString(buildHash[2]);
+
+    // Version format: <major>.<minor>-<build bum>-g<build hash>
+    // Example: 0.11-7-g1e5c2d
+    // Major, minor and build numberare BCD encoded.
+    std::string version =
+        std::to_string(ver[0]) + "." + std::to_string(ver[1]) + "-" +
+        std::to_string(buildNo) + "-g" + toHexString(buildHash[0]) +
+        toHexString(buildHash[1]) + toHexString(buildHash[2]);
     return version;
 }
 
