@@ -44,6 +44,7 @@ static const constexpr char* rootPath = "/xyz/openbmc_project/CallbackManager";
 
 static std::vector<std::unique_ptr<PowerSupply>> powerSupplies;
 static std::vector<uint64_t> addrTable = {0x50, 0x51};
+static uint8_t psuRescanBus = 7;
 static int pingFd = -1;
 
 ColdRedundancy::ColdRedundancy(
@@ -338,11 +339,12 @@ int pingPSU(const uint8_t& addr)
 }
 
 void rescanPSUEntityManager(
-    std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
+    uint8_t bus, std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
 {
     sdbusplus::message::message method = dbusConnection->new_method_call(
         "xyz.openbmc_project.FruDevice", "/xyz/openbmc_project/FruDevice",
-        "xyz.openbmc_project.FruDeviceManager", "ReScan");
+        "xyz.openbmc_project.FruDeviceManager", "ReScanBus");
+    method.append(bus);
 
     try
     {
@@ -392,7 +394,7 @@ void keepAlive(std::shared_ptr<sdbusplus::asio::connection>& dbusConnection)
     }
     if (newPSUFound)
     {
-        rescanPSUEntityManager(dbusConnection);
+        rescanPSUEntityManager(psuRescanBus, dbusConnection);
     }
 }
 
@@ -503,6 +505,7 @@ void ColdRedundancy::createPSU(
                                                      "entry in configuration\n";
                                         return;
                                     }
+                                    psuRescanBus = *psuBus;
                                     addrTable = *psuAddress;
                                     if (setPingFd(pingFd, *psuBus))
                                     {
