@@ -24,6 +24,9 @@ namespace pfr
 static constexpr uint8_t activeImage = 0;
 static constexpr uint8_t recoveryImage = 1;
 
+std::shared_ptr<sdbusplus::asio::dbus_interface> associationIface;
+std::set<std::tuple<std::string, std::string, std::string>> associations;
+
 PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
                        std::shared_ptr<sdbusplus::asio::connection> &conn_,
                        const std::string &path_, const ImageType &imgType_,
@@ -66,17 +69,18 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
         activation =
             "xyz.openbmc_project.Software.Activation.Activations.Active";
 
-        /* For all Active images, functional endpoints must be added. This *
-         * will be used in bmcweb for showing active component versions. */
-        using Association = std::tuple<std::string, std::string, std::string>;
-        std::vector<Association> associations;
-        associations.push_back(
-            Association("functional", "software_version", objPath));
-        auto associationsIface =
-            server.add_interface("/xyz/openbmc_project/software",
-                                 "xyz.openbmc_project.Association.Definitions");
-        associationsIface->register_property("Associations", associations);
-        associationsIface->initialize();
+        // For all Active images, functional endpoints must be added. This is
+        // used in bmcweb & ipmi for fetching active component versions.
+
+        // TODO: We have redundant active firmware version objects for BMC
+        // and BIOS active images. BMC version is read from /etc/os-release
+        // BIOS version is read from SMBIOS. Since it provides more
+        // version information, Lets expose those as functional.
+        // Down the line, Redundant inventory objects need to be addressed.
+        if (imgType == ImageType::cpldActive)
+        {
+            associations.emplace("functional", "software_version", objPath);
+        }
     }
 
     std::string reqActNone =
@@ -87,6 +91,11 @@ PfrVersion::PfrVersion(sdbusplus::asio::object_server &srv_,
     activationIface->register_property("RequestedActivation", reqActNone);
 
     activationIface->initialize();
+
+    // All the components exposed under PFR.Manager are updateable.
+    // Lets add objPath endpoints to 'updatable' association
+    associations.emplace("updateable", "software_version", objPath);
+    associationIface->set_property("Associations", associations);
 }
 
 void PfrVersion::updateVersion()
@@ -142,6 +151,12 @@ PfrConfig::PfrConfig(sdbusplus::asio::object_server &srv_,
                                    });
 
     pfrCfgIface->initialize();
+
+    associationIface =
+        server.add_interface("/xyz/openbmc_project/software",
+                             "xyz.openbmc_project.Association.Definitions");
+    associationIface->register_property("Associations", associations);
+    associationIface->initialize();
 }
 
 void PfrConfig::updateProvisioningStatus()
