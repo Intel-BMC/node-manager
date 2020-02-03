@@ -231,6 +231,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PkgValue);
@@ -260,6 +261,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x\n", cc);
@@ -287,6 +289,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*llx\n", cc, u8Size * 2, u64MsrVal);
@@ -323,6 +326,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
@@ -360,6 +364,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
@@ -398,6 +403,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x\n", cc);
@@ -432,6 +438,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
@@ -468,6 +475,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x\n", cc);
@@ -500,6 +508,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
@@ -535,6 +544,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x\n", cc);
@@ -571,6 +581,7 @@ int main(int argc, char* argv[])
         if (0 != ret)
         {
             printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
