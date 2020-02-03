@@ -45,6 +45,7 @@ typedef enum
     PECI_CC_DRIVER_ERR,
     PECI_CC_CPU_NOT_PRESENT,
     PECI_CC_MEM_ERR,
+    PECI_CC_TIMEOUT,
 } EPECIStatus;
 
 // PECI Timeout Options

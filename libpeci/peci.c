@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
+#include <errno.h>
 #include <fcntl.h>
 #include <peci.h>
 #include <string.h>
@@ -114,6 +115,10 @@ static EPECIStatus HW_peci_issue_cmd(unsigned int cmd, char* cmdPtr,
 
     if (ioctl(peci_fd, cmd, cmdPtr) != 0)
     {
+        if (errno == ETIMEDOUT)
+        {
+            return PECI_CC_TIMEOUT;
+        }
         return PECI_CC_DRIVER_ERR;
     }
 
