@@ -120,6 +120,9 @@ struct MountPointStateMachine
 
         virtual void onEnter()
         {
+            // Reset previous exit code
+            machine.exitCode = -1;
+
             machine.emitActivationStartedEvent();
         }
     };
@@ -337,11 +340,10 @@ struct MountPointStateMachine
                     }
                 });
             processIface->register_property(
-                "ExitCode", uint8_t(0),
-                [](const uint8_t& req, uint8_t& property) { return 0; },
-                [& machine = state.machine](const uint8_t& property) {
-                    // TODO: indicate real value instead of success
-                    return uint8_t(255);
+                "ExitCode", int32_t(0),
+                [](const int32_t& req, int32_t& property) { return 0; },
+                [& machine = state.machine](const int32_t& property) {
+                    return machine.exitCode;
                 });
             processIface->initialize();
         }
@@ -649,6 +651,7 @@ struct MountPointStateMachine
                     Configuration::MountPoint::toArgs(state.machine.config),
                     [& machine = state.machine](int exitCode, bool isReady) {
                         LogMsg(Logger::Info, machine.name, " process ended.");
+                        machine.exitCode = exitCode;
                         machine.emitSubprocessStoppedEvent();
                     }))
             {
@@ -799,6 +802,7 @@ struct MountPointStateMachine
                     args, [& machine = machine, secret = std::move(secret)](
                               int exitCode, bool isReady) {
                         LogMsg(Logger::Info, machine.name, " process ended.");
+                        machine.exitCode = exitCode;
                         machine.emitSubprocessStoppedEvent();
                     }))
             {
@@ -1002,7 +1006,7 @@ struct MountPointStateMachine
                            DeviceMonitor& devMonitor, const std::string& name,
                            const Configuration::MountPoint& config) :
         ioc{ioc},
-        name{name}, config{config}, state{InitialState(*this)}
+        name{name}, config{config}, state{InitialState(*this)}, exitCode{-1}
     {
         devMonitor.addDevice(config.nbdDevice);
     }
@@ -1085,4 +1089,5 @@ struct MountPointStateMachine
 
     std::optional<Target> target;
     State state;
+    int exitCode;
 };
