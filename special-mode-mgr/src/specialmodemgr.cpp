@@ -17,7 +17,6 @@
 #include "specialmodemgr.hpp"
 #include "file.hpp"
 
-#include <security/pam_appl.h>
 #include <sys/sysinfo.h>
 
 #include <pwd.h>
@@ -52,62 +51,12 @@ namespace secCtrl = sdbusplus::xyz::openbmc_project::Control::Security::server;
 
 #ifdef BMC_VALIDATION_UNSECURE_FEATURE
 
-static int pamFunctionConversation(int numMsg, const struct pam_message** msg,
-                                   struct pam_response** resp, void* appdataPtr)
-{
-    if (appdataPtr == nullptr)
-    {
-        return PAM_AUTH_ERR;
-    }
-    size_t passSize = std::strlen(reinterpret_cast<char*>(appdataPtr)) + 1;
-    char* pass = reinterpret_cast<char*>(malloc(passSize));
-    std::strncpy(pass, reinterpret_cast<char*>(appdataPtr), passSize);
-
-    *resp = reinterpret_cast<pam_response*>(
-        calloc(numMsg, sizeof(struct pam_response)));
-
-    for (int i = 0; i < numMsg; ++i)
-    {
-        if (msg[i]->msg_style != PAM_PROMPT_ECHO_OFF)
-        {
-            continue;
-        }
-        resp[i]->resp = pass;
-    }
-    return PAM_SUCCESS;
-}
-
-int pamUpdatePasswd(const char* username, const char* password)
-{
-    const struct pam_conv localConversation = {pamFunctionConversation,
-                                               const_cast<char*>(password)};
-    pam_handle_t* localAuthHandle = NULL; // this gets set by pam_start
-
-    int retval =
-        pam_start("passwd", username, &localConversation, &localAuthHandle);
-
-    if (retval != PAM_SUCCESS)
-    {
-        return retval;
-    }
-
-    retval = pam_chauthtok(localAuthHandle, PAM_SILENT);
-    if (retval != PAM_SUCCESS)
-    {
-        pam_end(localAuthHandle, retval);
-        return retval;
-    }
-
-    return pam_end(localAuthHandle, PAM_SUCCESS);
-}
-
 static void checkAndConfigureSpecialUser()
 {
     std::array<char, 4096> sbuffer{};
     struct spwd spwd;
     struct spwd* resultPtr = nullptr;
     constexpr const char* specialUser = "root";
-    constexpr const char* specialUserDefPasswd = "0penBmc1";
 
     // Query shadow entry for special user.
     int status = getspnam_r(specialUser, &spwd, sbuffer.data(),
@@ -117,22 +66,10 @@ static void checkAndConfigureSpecialUser()
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in querying shadow entry for special user");
     }
-    // Encrypted Password may be NULL or single character '!' if user is
-    // disabled
-    if (resultPtr->sp_pwdp[0] == 0 || resultPtr->sp_pwdp[1] == 0)
+    // Password will be single character '!' or '*' for disabled login
+    if ((resultPtr->sp_pwdp[0] == '!' || resultPtr->sp_pwdp[0] == '*') &&
+        resultPtr->sp_pwdp[1] == 0)
     {
-        pamUpdatePasswd(specialUser, specialUserDefPasswd);
-        // requery the special user shadow entry as there is password
-        // update.
-        resultPtr = nullptr;
-        status = getspnam_r(specialUser, &spwd, sbuffer.data(),
-                            sbuffer.max_size(), &resultPtr);
-        if (status || (&spwd != resultPtr))
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Error in querying shadow entry for special user");
-        }
-        // Mark the password as expired to force update the password
         File passwdFd("/etc/shadow", "r+");
         if ((passwdFd)() == nullptr)
         {
@@ -140,8 +77,11 @@ static void checkAndConfigureSpecialUser()
                 "Error in opening shadow file");
             return;
         }
+        // Mark the special user password as null, to allow
+        // nullok login.
+        resultPtr->sp_pwdp[0] = 0;
         // Mark the special user password as expired. This will
-        // force the user to set new password on first login.
+        // force user to update new password on first login.
         resultPtr->sp_lstchg = 0;
         putspent(resultPtr, (passwdFd)());
         phosphor::logging::log<phosphor::logging::level::INFO>(

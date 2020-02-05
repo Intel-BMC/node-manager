@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 project(specialmodemgr CXX)
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
@@ -39,15 +38,12 @@ link_directories(${DBUSINTERFACE_LIBRARY_DIRS})
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LOGGING phosphor-logging REQUIRED)
 
-find_package(PAM REQUIRED)
-
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} systemd)
 target_link_libraries(${PROJECT_NAME} ${SDBUSPLUSPLUS_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${DBUSINTERFACE_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} phosphor_logging)
-target_link_libraries(${PROJECT_NAME} pam)
 
 link_directories(${EXTERNAL_INSTALL_LOCATION}/lib)
 
