@@ -274,7 +274,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
     setting->addProperty("Privilege", static_cast<uint8_t>(4));
-    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(12));
+    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(100));
     setting->addProperty("Threshold", static_cast<uint8_t>(96));
     setting->addProperty("RetryCount", static_cast<uint8_t>(6));
     setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
@@ -288,7 +288,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
     setting->addProperty("Privilege", static_cast<uint8_t>(4));
-    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(12));
+    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(100));
     setting->addProperty("Threshold", static_cast<uint8_t>(96));
     setting->addProperty("RetryCount", static_cast<uint8_t>(6));
     setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
@@ -302,7 +302,7 @@ inline void loadSettings(sdbusplus::asio::object_server &objectServer,
     setting->addProperty("ForceEncryption", true);
     setting->addProperty("ForceAuthentication", true);
     setting->addProperty("Privilege", static_cast<uint8_t>(4));
-    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(12));
+    setting->addProperty("AccumulateIntervalMS", static_cast<uint8_t>(100));
     setting->addProperty("Threshold", static_cast<uint8_t>(96));
     setting->addProperty("RetryCount", static_cast<uint8_t>(6));
     setting->addProperty("RetryIntervalMS", static_cast<uint8_t>(20));
