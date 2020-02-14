@@ -63,10 +63,10 @@ static const boost::container::flat_map<uint8_t,
     recoveryReasonMap = {
         {0x01,
          {"BIOSFirmwareRecoveryReason",
-          "PCH active image authentication failure"}},
+          "BIOS active image authentication failure"}},
         {0x02,
          {"BIOSFirmwareRecoveryReason",
-          "PCH recovery image authentication failure"}},
+          "BIOS recovery image authentication failure"}},
         {0x03, {"MEFirmwareRecoveryReason", "ME launch failure"}},
         {0x04, {"BIOSFirmwareRecoveryReason", "ACM launch failure"}},
         {0x05, {"BIOSFirmwareRecoveryReason", "IBB launch failure"}},
@@ -85,30 +85,17 @@ static const boost::container::flat_map<uint8_t,
 static const boost::container::flat_map<uint8_t,
                                         std::pair<std::string, std::string>>
     panicReasonMap = {
-        {0x01, {"CPLDFirmwarePanicReason", "CPLD watchdog expired"}},
-        {0x02, {"BMCFirmwarePanicReason", "BMC watchdog expired"}},
-        {0x03, {"MEFirmwarePanicReason", "ME watchdog expired"}},
-        {0x04, {"BIOSFirmwarePanicReason", "ACM watchdog expired"}},
-        {0x05, {"BIOSFirmwarePanicReason", "IBB watchdog expired"}},
-        {0x06, {"BIOSFirmwarePanicReason", "OBB watchdog expired"}},
-        {0x07,
-         {"BMCFirmwarePanicReason", "BMC active image authentication failure"}},
-        {0x08,
-         {"BMCFirmwarePanicReason",
-          "BMC recovery image authentication failure"}},
+        {0x01, {"BIOSFirmwarePanicReason", "BIOS update intent"}},
+        {0x02, {"BMCFirmwarePanicReason", "BMC update intent"}},
+        {0x03, {"BMCFirmwarePanicReason", "BMC reset detected"}},
+        {0x04, {"BMCFirmwarePanicReason", "BMC watchdog expired"}},
+        {0x05, {"MEFirmwarePanicReason", "ME watchdog expired"}},
+        {0x06, {"BIOSFirmwarePanicReason", "ACM watchdog expired"}},
+        {0x07, {"BIOSFirmwarePanicReason", "IBB watchdog expired"}},
+        {0x08, {"BIOSFirmwarePanicReason", "OBB watchdog expired"}},
         {0x09,
          {"BIOSFirmwarePanicReason",
-          "PCH active image authentication failure"}},
-        {0x0A,
-         {"BIOSFirmwarePanicReason",
-          "PCH recovery image authentication failure"}},
-        {0x0B, {"MEFirmwarePanicReason", "ME authentication failure"}},
-        {0x0C,
-         {"BIOSFirmwarePanicReason",
-          "ACM or IBB or OBB authentication failure"}},
-        {0x0D, {"BIOSFirmwarePanicReason", "PCH update intent"}},
-        {0x0E, {"BMCFirmwarePanicReason", "BMC update intent"}},
-        {0x0F, {"BMCFirmwarePanicReason", "BMC reset detected"}}};
+          "ACM or IBB or OBB authentication failure"}}};
 
 // Firmware resiliency major map.
 // {<CPLD association>, {<Redfish MessageID>, <Error reason> })
@@ -119,12 +106,8 @@ static const boost::container::flat_map<uint8_t,
          {"BMCFirmwareResiliencyError", "BMC image authentication failed"}},
         {0x02,
          {"BIOSFirmwareResiliencyError", "BIOS image authentication failed"}},
-        {0x03, {"BMCFirmwareResiliencyError", "BMC boot failed"}},
-        {0x04, {"MEFirmwareResiliencyError", "ME boot failed"}},
-        {0x05, {"BIOSFirmwareResiliencyError", "ACM boot failed"}},
-        {0x06, {"BIOSFirmwareResiliencyError", "BIOS boot failed"}},
-        {0x07, {"BIOSFirmwareResiliencyError", "Update from PCH failed"}},
-        {0x08, {"BIOSFirmwarePanicReason", "Update from BMC failed"}}};
+        {0x03, {"BIOSFirmwareResiliencyError", "Update from BIOS failed"}},
+        {0x04, {"BMCFirmwareResiliencyError", "Update from BMC failed"}}};
 
 static void updateDbusPropertiesCache()
 {
