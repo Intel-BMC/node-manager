@@ -64,6 +64,8 @@ void Usage(char* progname)
            "Endpoint PCI Config Write <Seg Bus Dev Func Reg Data>");
     printf("\t%-28s%s\n", "RdEndpointConfigMMIO",
            "Endpoint MMIO Read <AType Bar Seg Bus Dev Func Reg>");
+    printf("\t%-28s%s\n", "WrEndpointConfigMMIO",
+           "Endpoint MMIO Write <AType Bar Seg Bus Dev Func Reg Data>");
     printf("\t%-28s%s\n", "raw", "Raw PECI command in bytes");
     printf("\n");
 }
@@ -86,6 +88,7 @@ int main(int argc, char* argv[])
     uint16_t u16PciReg = 0;
     uint64_t u64Offset = 0;
     uint32_t u32PciWriteVal = 0;
+    uint64_t u64MmioWriteVal = 0;
     uint8_t u8PkgIndex = 0;
     uint16_t u16PkgParam = 0;
     uint32_t u32PkgValue = 0;
@@ -585,6 +588,45 @@ int main(int argc, char* argv[])
             return 1;
         }
         printf("   cc:0x%02x 0x%0*x\n", cc, u8Size * 2, u32PciReadVal);
+    }
+    else if (strcmp(cmd, "wrendpointconfigmmio") == 0)
+    {
+        index = argc;
+        switch (argc - optind)
+        {
+            case 8:
+                u64MmioWriteVal = strtoull(argv[--index], NULL, 0);
+                u64Offset = strtoull(argv[--index], NULL, 0);
+                u8PciFunc = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciDev = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8PciBus = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Seg = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8Bar = (uint8_t)strtoul(argv[--index], NULL, 0);
+                u8AddrType = (uint8_t)strtoul(argv[--index], NULL, 0);
+                break;
+
+            default:
+                printf(
+                    "ERROR: Unsupported arguments for Endpoint MMIO Write\n");
+                goto ErrorExit;
+        }
+        if (verbose)
+        {
+            printf("Endpoint MMIO Write of Seg:%02x %02x:%02x:%02x AType:%02x "
+                   "Bar:%02x Offset:0x%" PRIx64 ": 0x%0*" PRIx64 "\n",
+                   u8Seg, u8PciBus, u8PciDev, u8PciFunc, u8AddrType, u8Bar,
+                   u64Offset, u8Size * 2, u64MmioWriteVal);
+        }
+        ret = peci_WrEndPointConfigMmio(address, u8Seg, u8PciBus, u8PciDev,
+                                        u8PciFunc, u8Bar, u8AddrType, u64Offset,
+                                        u8Size, u64MmioWriteVal, &cc);
+        if (0 != ret)
+        {
+            printf("ERROR %d: command failed\n", ret);
+            printf("   cc:0x%02x\n", cc);
+            return 1;
+        }
+        printf("   cc:0x%02x\n", cc);
     }
     else if (strcmp(cmd, "raw") == 0)
     {
