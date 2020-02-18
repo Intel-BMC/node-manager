@@ -990,6 +990,77 @@ EPECIStatus peci_WrEndPointPCIConfig(uint8_t target, uint8_t u8Seg,
 }
 
 /*-------------------------------------------------------------------------
+ * This function provides write access to PCI MMIO space at
+ * the requested PCI configuration address.
+ *------------------------------------------------------------------------*/
+EPECIStatus peci_WrEndPointConfigMmio(uint8_t target, uint8_t u8Seg,
+                                      uint8_t u8Bus, uint8_t u8Device,
+                                      uint8_t u8Fcn, uint8_t u8Bar,
+                                      uint8_t u8AddrType, uint64_t u64Offset,
+                                      uint8_t u8DataLen, uint64_t u64DataVal,
+                                      uint8_t* cc)
+{
+    int peci_fd = -1;
+    EPECIStatus ret;
+
+    if (cc == NULL)
+    {
+        return PECI_CC_INVALID_REQ;
+    }
+
+    if (peci_Open(&peci_fd) != PECI_CC_SUCCESS)
+    {
+        return PECI_CC_DRIVER_ERR;
+    }
+    ret = peci_WrEndPointConfigMmio_seq(target, u8Seg, u8Bus, u8Device, u8Fcn,
+                                        u8Bar, u8AddrType, u64Offset, u8DataLen,
+                                        u64DataVal, peci_fd, cc);
+    peci_Close(peci_fd);
+    return ret;
+}
+
+/*-------------------------------------------------------------------------
+ * This function allows sequential WrEndPointConfig to PCI MMIO with the
+ * provided peci file descriptor.
+ *------------------------------------------------------------------------*/
+EPECIStatus peci_WrEndPointConfigMmio_seq(
+    uint8_t target, uint8_t u8Seg, uint8_t u8Bus, uint8_t u8Device,
+    uint8_t u8Fcn, uint8_t u8Bar, uint8_t u8AddrType, uint64_t u64Offset,
+    uint8_t u8DataLen, uint64_t u64DataVal, int peci_fd, uint8_t* cc)
+{
+    struct peci_wr_end_pt_cfg_msg cmd;
+    EPECIStatus ret;
+
+    if (cc == NULL)
+    {
+        return PECI_CC_INVALID_REQ;
+    }
+
+    // Per the PECI spec, the read length must be a byte, word, dword, or qword
+    if (u8DataLen != 1 && u8DataLen != 2 && u8DataLen != 4 && u8DataLen != 8)
+    {
+        return PECI_CC_INVALID_REQ;
+    }
+
+    cmd.addr = target;
+    cmd.msg_type = PECI_ENDPTCFG_TYPE_MMIO;
+    cmd.params.mmio.seg = u8Seg;
+    cmd.params.mmio.bus = u8Bus;
+    cmd.params.mmio.device = u8Device;
+    cmd.params.mmio.function = u8Fcn;
+    cmd.params.mmio.bar = u8Bar;
+    cmd.params.mmio.addr_type = u8AddrType;
+    cmd.params.mmio.offset = u64Offset;
+    cmd.tx_len = u8DataLen;
+    cmd.value = u64DataVal;
+
+    ret = HW_peci_issue_cmd(PECI_IOC_WR_END_PT_CFG, (char*)&cmd, peci_fd);
+    *cc = cmd.cc;
+
+    return ret;
+}
+
+/*-------------------------------------------------------------------------
  *  This function provides crashdump discovery data over PECI
  *------------------------------------------------------------------------*/
 EPECIStatus peci_CrashDump_Discovery(uint8_t target, uint8_t subopcode,

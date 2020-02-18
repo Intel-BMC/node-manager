@@ -218,6 +218,20 @@ EPECIStatus peci_WrEndPointConfig_seq(uint8_t target, uint8_t u8MsgType,
                                       uint32_t DataVal, int peci_fd,
                                       uint8_t* cc);
 
+// Provides write access to the EP PCI MMIO space
+EPECIStatus peci_WrEndPointConfigMmio(uint8_t target, uint8_t u8Seg,
+                                      uint8_t u8Bus, uint8_t u8Device,
+                                      uint8_t u8Fcn, uint8_t u8Bar,
+                                      uint8_t u8AddrType, uint64_t u64Offset,
+                                      uint8_t u8DataLen, uint64_t u64DataVal,
+                                      uint8_t* cc);
+
+// Allows sequential write access to the EP PCI MMIO space
+EPECIStatus peci_WrEndPointConfigMmio_seq(
+    uint8_t target, uint8_t u8Seg, uint8_t u8Bus, uint8_t u8Device,
+    uint8_t u8Fcn, uint8_t u8Bar, uint8_t u8AddrType, uint64_t u64Offset,
+    uint8_t u8DataLen, uint64_t u64DataVal, int peci_fd, uint8_t* cc);
+
 // Provides access to the Crashdump Discovery API
 EPECIStatus peci_CrashDump_Discovery(uint8_t target, uint8_t subopcode,
                                      uint8_t param0, uint16_t param1,
