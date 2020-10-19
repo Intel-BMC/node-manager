@@ -633,7 +633,7 @@ class getNmStatistics : public Request
 
         iface->register_property("MaxValue", static_cast<double>(maxValue));
         iface->register_property("MinValue", static_cast<double>(minValue));
-        iface->register_property("Value", static_cast<uint16_t>(0));
+        iface->register_property("Value", static_cast<double>(0));
         iface->register_property(
             "Unit", std::string("xyz.openbmc_project.Sensor.Value.Unit.Watts"));
 
@@ -674,7 +674,7 @@ class getNmStatistics : public Request
                 dataReceived.data());
 
         iface->set_property(
-            "Value", static_cast<uint16_t>(getNmStatistics->data.stats.cur));
+            "Value", static_cast<double>(getNmStatistics->data.stats.cur));
     }
 
     void prepareRequest(uint8_t &netFn, uint8_t &lun, uint8_t &cmd,
