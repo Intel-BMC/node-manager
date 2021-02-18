@@ -1,4 +1,4 @@
-/* Copyright 2018 Intel
+/* Copyright 2018, 2021 Intel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -187,7 +187,6 @@ int main(int argc, char *argv[])
     createSensors();
     createAssociations();
     performReadings();
-    PowerCap powerCap(conn, server);
     GetMeVer getMeVer(conn, server);
 
     // associations have to be on the association interface
@@ -207,6 +206,8 @@ int main(int argc, char *argv[])
             healthData.set(type, level);
         });
     healthInterface->initialize();
+
+    Domain domainDcTotal(conn, server, dcTotal);
 
     sdbusplus::bus::match::match configurationMatch(
         static_cast<sdbusplus::bus::bus &>(*conn),
