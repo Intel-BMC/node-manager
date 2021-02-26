@@ -106,7 +106,12 @@ constexpr uint8_t ipmiSetNmPolicyNetFn = 0x2E;
 constexpr uint8_t ipmiSetNmPolicyLun = 0;
 constexpr uint8_t ipmiSetNmPolicyCmd = 0xC1;
 
-constexpr uint32_t ipmiSetNmPolicyLimitInWatts = 0;
+/**
+ * @brief Get Node Manager Policy defines
+ */
+constexpr uint8_t ipmiGetNmPolicyNetFn = 0x2E;
+constexpr uint8_t ipmiGetNmPolicyLun = 0;
+constexpr uint8_t ipmiGetNmPolicyCmd = 0xC2;
 
 /**
  * @brief Get Node Manager Capabilites defines
@@ -122,6 +127,7 @@ constexpr uint8_t globalThrottlingStats = 0x3;
 constexpr uint8_t globalVolAirflowStats = 0x4;
 constexpr uint8_t globalOutletAirflowTempStats = 0x5;
 constexpr uint8_t globalChassisPowerStats = 0x6;
+constexpr uint8_t policyPowerStats = 0x11;
 constexpr uint8_t globalHostUnhandleReqStats = 0x1B;
 constexpr uint8_t globalHostResponseTimeStats = 0x1C;
 constexpr uint8_t globalHostCommFailureStats = 0x1F;
@@ -236,12 +242,51 @@ typedef struct
     uint8_t policyId;
     uint8_t triggerType : 4, configurationAction : 1, cpuPowerCorrection : 2,
         storageOption : 1;
-    uint8_t failureAction : 2, reservedByte7 : 5, dcPowerDomain : 1;
+    uint8_t sendAlert : 1, shutdownSystem : 1, reservedByte7 : 6;
     int16_t limit;
     uint32_t correctionTime;
     uint16_t triggerLimit;
     uint16_t statsPeriod;
 } __attribute__((packed)) nmIpmiSetNmPolicyReq;
+static_assert(sizeof(nmIpmiSetNmPolicyReq) == 17);
+
+/**
+ * @brief Set Node Manager Policy response format
+ */
+typedef struct
+{
+    ipmiIana iana;
+} __attribute__((packed)) nmIpmiSetNmPolicyResp;
+static_assert(sizeof(nmIpmiSetNmPolicyResp) == 3);
+
+/**
+ * @brief Get Node Manager Policy request format
+ */
+typedef struct
+{
+    ipmiIana iana;
+    uint8_t domainId : 4, reserved0 : 4;
+    uint8_t policyId;
+} __attribute__((packed)) nmIpmiGetNmPolicyReq;
+static_assert(sizeof(nmIpmiGetNmPolicyReq) == 5);
+
+/**
+ * @brief Get Node Manager Policy response format
+ */
+typedef struct
+{
+    ipmiIana iana;
+    uint8_t domainId : 4, policyEnabled : 1, domainEnabled : 1,
+        globalEnabled : 1, external : 1;
+    uint8_t triggerType : 4, policyType : 1, cpuPowerCorrection : 2,
+        storageOption : 1;
+    uint8_t sendAlert : 1, shutdownSystem : 1, reserved0 : 6;
+    int16_t limit;
+    uint32_t correctionTime;
+    uint16_t triggerLimit;
+    uint16_t statsPeriod;
+} __attribute__((packed)) nmIpmiGetNmPolicyResp;
+static_assert(sizeof(nmIpmiGetNmPolicyResp) == 16);
 
 /**
  * @brief Get Node Manager Capabilites request format
@@ -715,6 +760,9 @@ struct InternalFailure final : public sdbusplus::exception_t
     };
 };
 
+/**
+ * @brief DBus exception thrown when got non-success IPMI completion code
+ */
 struct NonSuccessCompletionCode final : public sdbusplus::exception_t
 {
     static constexpr auto errName =
@@ -740,21 +788,17 @@ struct NonSuccessCompletionCode final : public sdbusplus::exception_t
 };
 
 /**
- * @brief DBus exception thrown while policy creation
+ * @brief DBus exception thrown when IPMI response size does not match expected
+ * size
  */
-struct PoliciesCannotBeCreated final : public sdbusplus::exception_t
+struct WrongResponseSize final : public sdbusplus::exception_t
 {
     static constexpr auto errName =
-        "xyz.openbmc_project.NodeManager.Error.PoliciesCannotBeCreated";
+        "xyz.openbmc_project.NodeManager.Error.WrongResponseSize";
     static constexpr auto errDesc =
-        "Policies in given power domain cannot be created in the current "
-        "configuration e.g., attempt to create predictive power limiting "
-        "policy in DC power domain";
+        "IPMB response size does not match expected value";
     static constexpr auto errWhat =
-        "xyz.openbmc_project.NodeManager.Error.PoliciesCannotBeCreated: "
-        "Policies in given power domain cannot be created in the current "
-        "configuration e.g., attempt to create predictive power limiting "
-        "policy in DC power domain";
+        "IPMB response size does not match expected value";
     const char *name() const noexcept override
     {
         return errName;
@@ -790,6 +834,20 @@ struct PolicyParams
 };
 
 /**
+ * @brief Statistics type provided on DBus as return type for GetStatistics
+ */
+using StatValuesMap = std::map<std::string, std::variant<double, uint32_t>>;
+
+/**
+ * @brief Node Manager Statistics DBus interface
+ * The following methods shall be supported:
+ * * GetStatistics
+ * * * return StatValuesMap - statistics collection
+ */
+constexpr const char *nmStatisitcsIf =
+    "xyz.openbmc_project.NodeManager.Statistics";
+
+/**
  * @brief Node Manager Policy Attributes DBus interface
  * The following properties shall be supported:
  * * uint16_t Limit
@@ -798,21 +856,71 @@ constexpr const char *nmPolicyAttributesIf =
     "xyz.openbmc_project.NodeManager.PolicyAttributes";
 
 /**
- * @brief Node Manager Policy Statistics DBus interface
- * The following methods shall be supported:
- * * GetStatistics
- * * * return StatValuesMap - statistics collection
+ * @brief Generic function used to send and receive IPMI message
+ *
+ * @tparam Req - IPMI request type
+ * @tparam Resp - IPMI response type
+ * @param conn  - DBus connection
+ * @param netFnReq - IPMI Net Function
+ * @param lunReq - IPMI LUN
+ * @param cmdReq - IPMI command
+ * @param req - IPMI request
+ * @param resp - IPMI response
  */
-constexpr const char *nmPolicyStatisitcsIf =
-    "xyz.openbmc_project.NodeManager.Statistics";
+template <typename Req, typename Resp>
+void ipmiSendReceive(std::shared_ptr<sdbusplus::asio::connection> conn,
+                     uint8_t netFnReq, uint8_t lunReq, uint8_t cmdReq,
+                     const Req &req, Resp &resp)
+{
+    IpmbDbusRspType ipmbResponse;
+    std::vector<uint8_t> dataToSend(reinterpret_cast<const uint8_t *>(&req),
+                                    reinterpret_cast<const uint8_t *>(&req) +
+                                        sizeof(req));
+
+    int sendStatus = ipmbSendRequest(*conn, ipmbResponse, dataToSend, netFnReq,
+                                     lunReq, cmdReq);
+    if (sendStatus != 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "dbus error while sending IPMB request ",
+            phosphor::logging::entry("%d", sendStatus));
+        throw InternalFailure();
+    }
+
+    const auto &[status, netfnResp, lunResp, cmdResp, cc, dataReceived] =
+        ipmbResponse;
+    if (status)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "transport error while sending IPMB request ",
+            phosphor::logging::entry("%d", status));
+        throw InternalFailure();
+    }
+
+    if (cc != 0x00)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "error while sending IPMB request, wrong cc: ",
+            phosphor::logging::entry("%d", cc));
+        throw NonSuccessCompletionCode();
+    }
+
+    if (dataReceived.size() != sizeof(resp))
+    {
+        phosphor::logging::log<phosphor::logging::level::WARNING>(
+            "wrong response size");
+        throw WrongResponseSize();
+    }
+
+    std::copy(dataReceived.begin(), dataReceived.end(),
+              reinterpret_cast<uint8_t *>(&resp));
+}
 
 /**
  * @brief Node Manager Policy
  */
 class Policy
 {
-    using StatValuesMap = std::map<std::string, std::variant<double, uint32_t>>;
-
   public:
     Policy() = delete;
     Policy(const Policy &) = delete;
@@ -823,69 +931,40 @@ class Policy
     Policy(std::shared_ptr<sdbusplus::asio::connection> connArg,
            sdbusplus::asio::object_server &server, std::string &domainDbusPath,
            uint8_t domainIdArg, uint8_t idArg) :
-        domainId(domainIdArg),
-        id(idArg), dbusPath(domainDbusPath + "/Policy/" + std::to_string(id)),
-        conn(connArg)
+        conn(connArg),
+        dbusPath(domainDbusPath + "/Policy/" + std::to_string(idArg)),
+        domainId(domainIdArg), id(idArg)
     {
         createAttributesInterface(server);
         createStatisticsInterface(server);
     }
 
-    uint8_t setPolicy(PolicyParams &params)
+    uint8_t setOrUpdatePolicy(PolicyParams &params)
     {
-        std::vector<uint8_t> dataToSend;
-        dataToSend.resize(sizeof(nmIpmiSetNmPolicyReq));
+        nmIpmiSetNmPolicyReq req = {0};
 
-        auto nmSetPolicy =
-            reinterpret_cast<nmIpmiSetNmPolicyReq *>(dataToSend.data());
+        ipmiSetIntelIanaNumber(req.iana);
+        req.domainId = domainId;
+        req.policyEnabled = 0x1; // Enable policy during creation
+        req.policyId = id;
+        req.triggerType = params.triggerType;
+        req.configurationAction = 0x1; // Create or modify policy
+        req.cpuPowerCorrection = params.powerCorrectionType;
+        req.storageOption = params.policyStorage;
+        uint8_t sendAlert, shutdownSystem;
+        parseLimitException(params.limitException, sendAlert, shutdownSystem);
+        req.sendAlert = sendAlert;
+        req.shutdownSystem = shutdownSystem;
+        req.limit = params.limit;
+        req.correctionTime = params.correctionInMs;
+        req.triggerLimit = params.triggerLimit;
+        req.statsPeriod = params.statReportingPeriod;
 
-        ipmiSetIntelIanaNumber(nmSetPolicy->iana);
-        nmSetPolicy->domainId = domainId;
-        nmSetPolicy->policyEnabled = 0x1; // Enable policy during creation
-        nmSetPolicy->reservedByte4 = 0x0;
-        nmSetPolicy->policyId = id;
-        nmSetPolicy->triggerType = params.triggerType;
-        nmSetPolicy->configurationAction = 0x1; // Create or modify policy
-        nmSetPolicy->cpuPowerCorrection = params.powerCorrectionType;
-        nmSetPolicy->storageOption = params.policyStorage;
-        nmSetPolicy->failureAction = params.limitException;
-        nmSetPolicy->reservedByte7 = 0x0;
-        nmSetPolicy->dcPowerDomain = 0x0;
-        nmSetPolicy->limit = params.limit;
-        nmSetPolicy->correctionTime = params.correctionInMs;
-        nmSetPolicy->triggerLimit = params.triggerLimit;
-        nmSetPolicy->statsPeriod = params.statReportingPeriod;
-
-        IpmbDbusRspType ipmbResponse;
-        int sendStatus = ipmbSendRequest(
-            *conn, ipmbResponse, dataToSend, ipmiSetNmPolicyNetFn,
-            ipmiSetNmPolicyLun, ipmiSetNmPolicyCmd);
-        if (sendStatus != 0)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "dbus error while policy creation ",
-                phosphor::logging::entry("%d", sendStatus));
-            throw InternalFailure();
-        }
-
-        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
-        if (status)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "transport error while policy creation ",
-                phosphor::logging::entry("%d", status));
-            throw InternalFailure();
-        }
-
-        if (cc != 0x00)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "error while policy creation ",
-                phosphor::logging::entry("%d", cc));
-            throw PoliciesCannotBeCreated();
-        }
+        setPolicyIpmi(req);
 
         limit = params.limit;
+        failureAction = params.limitException;
+        correctionTime = params.correctionInMs;
 
         return id;
     }
@@ -896,26 +975,48 @@ class Policy
     }
 
   private:
+    std::shared_ptr<sdbusplus::asio::connection> conn;
+    std::string dbusPath;
     uint8_t domainId;
     uint8_t id;
-    std::string dbusPath;
     std::shared_ptr<sdbusplus::asio::dbus_interface> attributesIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> statisticsIf;
-    std::shared_ptr<sdbusplus::asio::connection> conn;
-    uint16_t limit;
+    uint16_t limit{0};
+    int failureAction{0};
+    uint32_t correctionTime{0};
 
     void createAttributesInterface(sdbusplus::asio::object_server &server)
     {
         attributesIf = server.add_interface(dbusPath, nmPolicyAttributesIf);
-        attributesIf->register_property_r(
-            "Limit", uint16_t{0}, sdbusplus::vtable::property_::const_,
-            [this](const auto &) { return getLimit(); });
+        attributesIf->register_property_rw(
+            "Limit", uint16_t{0}, sdbusplus::vtable::property_::emits_change,
+            [this](const auto &newPropertyValue, const auto &) {
+                updatePolicyLimit(newPropertyValue);
+                return 1;
+            },
+            [this](const auto &) { return limit; });
+        attributesIf->register_property_rw(
+            "LimitException", int{0},
+            sdbusplus::vtable::property_::emits_change,
+            [this](const auto &newPropertyValue, const auto &) {
+                updatePolicyLimitException(newPropertyValue);
+                return 1;
+            },
+            [this](const auto &) { return failureAction; });
+        attributesIf->register_property_rw(
+            "CorrectionInMs", uint32_t{0},
+            sdbusplus::vtable::property_::emits_change,
+            [this](const auto &newPropertyValue, const auto &) {
+                updatePolicyCorrectionTime(newPropertyValue);
+                return 1;
+            },
+            [this](const auto &) { return correctionTime; });
         attributesIf->initialize();
     }
 
     void createStatisticsInterface(sdbusplus::asio::object_server &server)
     {
-        statisticsIf = server.add_interface(dbusPath, nmPolicyStatisitcsIf);
+        statisticsIf = server.add_interface(dbusPath, nmStatisitcsIf);
         statisticsIf->register_method("GetStatistics", [this]() {
             std::map<std::string, StatValuesMap> stats{
                 {"Power", getPowerStatistics()}};
@@ -924,81 +1025,138 @@ class Policy
         statisticsIf->initialize();
     }
 
-    uint16_t getLimit() const
-    {
-        return limit;
-    }
-
     StatValuesMap getPowerStatistics()
     {
-        std::vector<uint8_t> dataToSend;
-        dataToSend.resize(sizeof(nmIpmiGetNmStatisticsReq));
+        nmIpmiGetNmStatisticsReq req = {0};
+        nmIpmiGetNmStatisticsResp resp = {0};
 
-        auto nmGetStatisticsReq =
-            reinterpret_cast<nmIpmiGetNmStatisticsReq *>(dataToSend.data());
+        ipmiSetIntelIanaNumber(req.iana);
+        req.mode = policyPowerStats;
+        req.domainId = domainId;
+        req.statsSide = 0;
+        req.perComponent = 0; // Accumulated data from whole domain
+        req.policyId = id;
 
-        ipmiSetIntelIanaNumber(nmGetStatisticsReq->iana);
-        nmGetStatisticsReq->mode = 0x11; // Per policy power statistics
-        nmGetStatisticsReq->reserved3B = 0;
-        nmGetStatisticsReq->domainId = domainId;
-        nmGetStatisticsReq->statsSide = 0;
-        nmGetStatisticsReq->reserved = 0;
-        nmGetStatisticsReq->perComponent =
-            0; // Accumulated data from whole domain
-        nmGetStatisticsReq->policyId = id;
-
-        IpmbDbusRspType ipmbResponse;
-        int sendStatus = ipmbSendRequest(
-            *conn, ipmbResponse, dataToSend, ipmiGetNmStatisticsNetFn,
-            ipmiGetNmStatisticsLun, ipmiGetNmStatisticsCmd);
-        if (sendStatus != 0)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "dbus error while getting statistics ",
-                phosphor::logging::entry("%d", sendStatus));
-            throw InternalFailure();
-        }
-
-        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
-        if (status)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "transport error while getting statistics ",
-                phosphor::logging::entry("%d", status));
-            throw InternalFailure();
-        }
-
-        if (cc != 0x00)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "error while getting statistics ",
-                phosphor::logging::entry("%d", cc));
-            throw NonSuccessCompletionCode();
-        }
-
-        if (dataReceived.size() != sizeof(nmIpmiGetNmStatisticsResp))
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "getting statistics response size does not match expected "
-                "value");
-            throw InternalFailure();
-        }
-
-        auto nmGetStatisticsResp =
-            reinterpret_cast<const nmIpmiGetNmStatisticsResp *>(
-                dataReceived.data());
+        ipmiSendReceive<nmIpmiGetNmStatisticsReq, nmIpmiGetNmStatisticsResp>(
+            conn, ipmiGetNmStatisticsNetFn, ipmiGetNmStatisticsLun,
+            ipmiGetNmStatisticsCmd, req, resp);
 
         StatValuesMap stats{
-            {"Current",
-             static_cast<double>(nmGetStatisticsResp->data.stats.cur)},
-            {"Max", static_cast<double>(nmGetStatisticsResp->data.stats.max)},
-            {"Min", static_cast<double>(nmGetStatisticsResp->data.stats.min)},
-            {"Average",
-             static_cast<double>(nmGetStatisticsResp->data.stats.avg)},
+            {"Current", static_cast<double>(resp.data.stats.cur)},
+            {"Max", static_cast<double>(resp.data.stats.max)},
+            {"Min", static_cast<double>(resp.data.stats.min)},
+            {"Average", static_cast<double>(resp.data.stats.avg)},
             {"StatisticsReportingPeriod",
-             static_cast<double>(nmGetStatisticsResp->statsReportPeriod)}};
+             static_cast<double>(resp.statsReportPeriod)}};
 
         return stats;
+    }
+
+    void setPolicyIpmi(const nmIpmiSetNmPolicyReq &req)
+    {
+        nmIpmiSetNmPolicyResp resp = {0};
+        ipmiSendReceive<nmIpmiSetNmPolicyReq, nmIpmiSetNmPolicyResp>(
+            conn, ipmiSetNmPolicyNetFn, ipmiSetNmPolicyLun, ipmiSetNmPolicyCmd,
+            req, resp);
+    }
+
+    void getPolicyIpmi(const nmIpmiGetNmPolicyReq &req,
+                       nmIpmiGetNmPolicyResp &resp)
+    {
+        ipmiSendReceive<nmIpmiGetNmPolicyReq, nmIpmiGetNmPolicyResp>(
+            conn, ipmiGetNmPolicyNetFn, ipmiGetNmPolicyLun, ipmiGetNmPolicyCmd,
+            req, resp);
+    }
+
+    void updatePolicy(std::function<void(nmIpmiSetNmPolicyReq &)> callback)
+    {
+        nmIpmiGetNmPolicyReq getPolicyReq = {0};
+        nmIpmiGetNmPolicyResp getPolicyResp = {0};
+        nmIpmiSetNmPolicyReq setPolicyReq = {0};
+
+        ipmiSetIntelIanaNumber(getPolicyReq.iana);
+        getPolicyReq.domainId = domainId;
+        getPolicyReq.policyId = id;
+        getPolicyIpmi(getPolicyReq, getPolicyResp);
+
+        ipmiSetIntelIanaNumber(setPolicyReq.iana);
+        setPolicyReq.domainId = getPolicyResp.domainId;
+        setPolicyReq.policyEnabled = 0x1; // Enable policy during creation
+        setPolicyReq.policyId = id;
+        setPolicyReq.triggerType = getPolicyResp.triggerType;
+        setPolicyReq.configurationAction = 0x1; // Create or modify policy
+        setPolicyReq.cpuPowerCorrection = getPolicyResp.cpuPowerCorrection;
+        setPolicyReq.storageOption = getPolicyResp.storageOption;
+        setPolicyReq.sendAlert = getPolicyResp.sendAlert;
+        setPolicyReq.shutdownSystem = getPolicyResp.shutdownSystem;
+        setPolicyReq.limit = getPolicyResp.limit;
+        setPolicyReq.correctionTime = getPolicyResp.correctionTime;
+        setPolicyReq.triggerLimit = getPolicyResp.triggerLimit;
+        setPolicyReq.statsPeriod = getPolicyResp.statsPeriod;
+
+        callback(setPolicyReq);
+        setPolicyIpmi(setPolicyReq);
+    }
+
+    void updatePolicyLimit(uint16_t newLimit)
+    {
+        updatePolicy([newLimit](nmIpmiSetNmPolicyReq &setPolicyReq) {
+            setPolicyReq.limit = newLimit;
+        });
+        limit = newLimit;
+    }
+
+    void updatePolicyLimitException(uint8_t newLimitException)
+    {
+        updatePolicy([newLimitException,
+                      this](nmIpmiSetNmPolicyReq &setPolicyReq) {
+            uint8_t sendAlert, shutdownSystem;
+            parseLimitException(newLimitException, sendAlert, shutdownSystem);
+            setPolicyReq.sendAlert = sendAlert;
+            setPolicyReq.shutdownSystem = shutdownSystem;
+        });
+        failureAction = newLimitException;
+    }
+
+    void updatePolicyCorrectionTime(uint32_t newCorrectionTime)
+    {
+        updatePolicy([newCorrectionTime](nmIpmiSetNmPolicyReq &setPolicyReq) {
+            setPolicyReq.correctionTime = newCorrectionTime;
+        });
+        correctionTime = newCorrectionTime;
+    }
+
+    /**
+     * @brief Maps limitException into sendAlert and shutdown bits.
+     *  Possible limitException values are:
+     *  noAction = 0,
+     *  powerOff = 1,
+     *  logEvent = 2,
+     *  logEventAndPowerOff = 3
+     */
+    void parseLimitException(const int &limitException, uint8_t &sendAlert,
+                             uint8_t &shutdown)
+    {
+        if (limitException == 0)
+        {
+            sendAlert = 0;
+            shutdown = 0;
+        }
+        else if (limitException == 1)
+        {
+            sendAlert = 0;
+            shutdown = 1;
+        }
+        else if (limitException == 2)
+        {
+            sendAlert = 1;
+            shutdown = 0;
+        }
+        else if (limitException == 3)
+        {
+            sendAlert = 1;
+            shutdown = 1;
+        }
     }
 };
 
@@ -1099,6 +1257,7 @@ class Domain
         }
         createCapabilitesInterface(server);
         createPolicyManagerInterface(server);
+        createStatisticsInterface(server);
     }
 
   private:
@@ -1106,8 +1265,9 @@ class Domain
     std::string dbusPath;
     std::shared_ptr<sdbusplus::asio::dbus_interface> capabilitesIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> policyManagerIf;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> statisticsIf;
     std::shared_ptr<sdbusplus::asio::connection> conn;
-    std::unique_ptr<Policy> policy;
+    std::vector<std::unique_ptr<Policy>> policies;
 
     void createCapabilitesInterface(sdbusplus::asio::object_server &server)
     {
@@ -1135,6 +1295,17 @@ class Domain
         policyManagerIf->initialize();
     }
 
+    void createStatisticsInterface(sdbusplus::asio::object_server &server)
+    {
+        statisticsIf = server.add_interface(dbusPath, nmStatisitcsIf);
+        statisticsIf->register_method("GetStatistics", [this]() {
+            std::map<std::string, StatValuesMap> stats{
+                {"Power", getPowerStatistics()}};
+            return stats;
+        });
+        statisticsIf->initialize();
+    }
+
     double getCapabilityMin()
     {
         uint16_t min, max;
@@ -1152,75 +1323,63 @@ class Domain
     uint8_t createOrUpdatePolicy(sdbusplus::asio::object_server &server,
                                  uint8_t policyId, PolicyParams &policyParams)
     {
-        if (policy && policy->getId() == policyId)
+        for (auto &policy : policies)
         {
-            return policy->setPolicy(policyParams);
+            if (policy->getId() == policyId)
+            {
+                return policy->setOrUpdatePolicy(policyParams);
+            }
         }
         auto policyTmp =
             std::make_unique<Policy>(conn, server, dbusPath, id, policyId);
-        uint8_t policyIdTmp = policyTmp->setPolicy(policyParams);
-        policy = std::move(policyTmp);
+        uint8_t policyIdTmp = policyTmp->setOrUpdatePolicy(policyParams);
+        policies.emplace_back(std::move(policyTmp));
         return policyIdTmp;
     }
 
     void getCapabilites(uint16_t &minLimit, uint16_t &maxLimit)
     {
-        std::vector<uint8_t> dataToSend;
-        dataToSend.resize(sizeof(nmIpmiGetNmCapabilitesReq));
+        nmIpmiGetNmCapabilitesReq req = {0};
+        nmIpmiGetNmCapabilitesResp resp = {0};
 
-        auto nmGetNmCapabilitesReq =
-            reinterpret_cast<nmIpmiGetNmCapabilitesReq *>(dataToSend.data());
+        ipmiSetIntelIanaNumber(req.iana);
+        req.domainId = id;
+        req.policyTriggerType = 0; // No Policy Trigger
+        req.policyType = 1;        // Power Control Policy
 
-        ipmiSetIntelIanaNumber(nmGetNmCapabilitesReq->iana);
-        nmGetNmCapabilitesReq->domainId = id;
-        nmGetNmCapabilitesReq->reserved0 = 0;
-        nmGetNmCapabilitesReq->policyTriggerType = 0; // No Policy Trigger
-        nmGetNmCapabilitesReq->policyType = 1;        // Power Control Policy
-        nmGetNmCapabilitesReq->reserved1 = 0;
+        ipmiSendReceive<nmIpmiGetNmCapabilitesReq, nmIpmiGetNmCapabilitesResp>(
+            conn, ipmiGetNmCapabilitesNetFn, ipmiGetNmCapabilitesLun,
+            ipmiGetNmCapabilitesCmd, req, resp);
 
-        IpmbDbusRspType ipmbResponse;
-        int sendStatus = ipmbSendRequest(
-            *conn, ipmbResponse, dataToSend, ipmiGetNmCapabilitesNetFn,
-            ipmiGetNmCapabilitesLun, ipmiGetNmCapabilitesCmd);
-        if (sendStatus != 0)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "dbus error while getting domain capabilites ",
-                phosphor::logging::entry("%d", sendStatus));
-            throw InternalFailure();
-        }
+        minLimit = resp.minLimit;
+        maxLimit = resp.maxLimit;
+    }
 
-        const auto &[status, netfn, lun, cmd, cc, dataReceived] = ipmbResponse;
-        if (status)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "transport error while getting domain capabilites ",
-                phosphor::logging::entry("%d", status));
-            throw InternalFailure();
-        }
+    StatValuesMap getPowerStatistics()
+    {
+        nmIpmiGetNmStatisticsReq req = {0};
+        nmIpmiGetNmStatisticsResp resp = {0};
 
-        if (cc != 0x00)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "error while getting domain capabilites ",
-                phosphor::logging::entry("%d", cc));
-            throw NonSuccessCompletionCode();
-        }
+        ipmiSetIntelIanaNumber(req.iana);
+        req.mode = globalPowerStats;
+        req.domainId = id;
+        req.statsSide = 0;
+        req.perComponent = 0; // Accumulated data from whole domain
+        req.policyId = 0;
 
-        if (dataReceived.size() != sizeof(nmIpmiGetNmCapabilitesResp))
-        {
-            phosphor::logging::log<phosphor::logging::level::WARNING>(
-                "getting domain capabilites response size does not match "
-                "expected value");
-            throw InternalFailure();
-        }
+        ipmiSendReceive<nmIpmiGetNmStatisticsReq, nmIpmiGetNmStatisticsResp>(
+            conn, ipmiGetNmStatisticsNetFn, ipmiGetNmStatisticsLun,
+            ipmiGetNmStatisticsCmd, req, resp);
 
-        auto nmGetNmCapabilitesResp =
-            reinterpret_cast<const nmIpmiGetNmCapabilitesResp *>(
-                dataReceived.data());
+        StatValuesMap stats{
+            {"Current", static_cast<double>(resp.data.stats.cur)},
+            {"Max", static_cast<double>(resp.data.stats.max)},
+            {"Min", static_cast<double>(resp.data.stats.min)},
+            {"Average", static_cast<double>(resp.data.stats.avg)},
+            {"StatisticsReportingPeriod",
+             static_cast<double>(resp.statsReportPeriod)}};
 
-        minLimit = nmGetNmCapabilitesResp->minLimit;
-        maxLimit = nmGetNmCapabilitesResp->maxLimit;
+        return stats;
     }
 };
 
