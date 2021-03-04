@@ -1308,16 +1308,16 @@ class Domain
 
     double getCapabilityMin()
     {
-        uint16_t min, max;
+        double min, max;
         getCapabilites(min, max);
-        return static_cast<double>(min);
+        return min;
     }
 
     double getCapabilityMax()
     {
-        uint16_t min, max;
+        double min, max;
         getCapabilites(min, max);
-        return static_cast<double>(max);
+        return max;
     }
 
     uint8_t createOrUpdatePolicy(sdbusplus::asio::object_server &server,
@@ -1337,7 +1337,7 @@ class Domain
         return policyIdTmp;
     }
 
-    void getCapabilites(uint16_t &minLimit, uint16_t &maxLimit)
+    void getCapabilites(double &minLimit, double &maxLimit)
     {
         nmIpmiGetNmCapabilitesReq req = {0};
         nmIpmiGetNmCapabilitesResp resp = {0};
@@ -1347,12 +1347,25 @@ class Domain
         req.policyTriggerType = 0; // No Policy Trigger
         req.policyType = 1;        // Power Control Policy
 
-        ipmiSendReceive<nmIpmiGetNmCapabilitesReq, nmIpmiGetNmCapabilitesResp>(
-            conn, ipmiGetNmCapabilitesNetFn, ipmiGetNmCapabilitesLun,
-            ipmiGetNmCapabilitesCmd, req, resp);
+        try
+        {
+            ipmiSendReceive<nmIpmiGetNmCapabilitesReq,
+                            nmIpmiGetNmCapabilitesResp>(
+                conn, ipmiGetNmCapabilitesNetFn, ipmiGetNmCapabilitesLun,
+                ipmiGetNmCapabilitesCmd, req, resp);
 
-        minLimit = resp.minLimit;
-        maxLimit = resp.maxLimit;
+            minLimit = static_cast<double>(resp.minLimit);
+            maxLimit = static_cast<double>(resp.maxLimit);
+        }
+        catch (sdbusplus::exception_t &e)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to get domain capabilites: ",
+                phosphor::logging::entry("%s", e.what()));
+
+            minLimit = std::numeric_limits<double>::quiet_NaN();
+            maxLimit = std::numeric_limits<double>::quiet_NaN();
+        }
     }
 
     StatValuesMap getPowerStatistics()
