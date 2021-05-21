@@ -16,6 +16,7 @@
 #include <boost/container/flat_set.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
+#include <string>
 
 #ifndef NODEMANAGERPROXY_HPP
 #define NODEMANAGERPROXY_HPP
@@ -813,6 +814,33 @@ struct WrongResponseSize final : public sdbusplus::exception_t
     };
 };
 
+struct PoliciesCannotBeCreated final : public sdbusplus::exception_t
+{
+    static constexpr auto errName =
+        "xyz.openbmc_project.NodeManager.Error.PoliciesCannotBeCreated";
+    static constexpr auto errDesc =
+        "Policies in given power domain cannot be created in the current "
+        "configuration e.g., attempt to create predictive power limiting "
+        "policy in DC power domain";
+    static constexpr auto errWhat =
+        "xyz.openbmc_project.NodeManager.Error.PoliciesCannotBeCreated: "
+        "Policies in given power domain cannot be created in the current "
+        "configuration e.g., attempt to create predictive power limiting "
+        "policy in DC power domain";
+    const char *name() const noexcept override
+    {
+        return errName;
+    };
+    const char *description() const noexcept override
+    {
+        return errDesc;
+    };
+    const char *what() const noexcept override
+    {
+        return errWhat;
+    };
+};
+
 /**
  * @brief Policy parameters structure
  */
@@ -930,23 +958,26 @@ class Policy
 
     Policy(std::shared_ptr<sdbusplus::asio::connection> connArg,
            sdbusplus::asio::object_server &server, std::string &domainDbusPath,
-           uint8_t domainIdArg, uint8_t idArg) :
+           uint8_t domainIdArg, std::string idArg) :
         conn(connArg),
-        dbusPath(domainDbusPath + "/Policy/" + std::to_string(idArg)),
-        domainId(domainIdArg), id(idArg)
+        dbusPath(domainDbusPath + "/Policy/" + idArg), domainId(domainIdArg),
+        id(idArg)
     {
         createAttributesInterface(server);
         createStatisticsInterface(server);
     }
 
-    uint8_t setOrUpdatePolicy(PolicyParams &params)
+    static constexpr uint8_t dmtfPowerPolicyId = 254;
+    static constexpr uint8_t dmtfPowerOemPolicyId = 255;
+
+    std::string setOrUpdatePolicy(PolicyParams &params)
     {
         nmIpmiSetNmPolicyReq req = {0};
 
         ipmiSetIntelIanaNumber(req.iana);
         req.domainId = domainId;
         req.policyEnabled = 0x1; // Enable policy during creation
-        req.policyId = id;
+        req.policyId = getIdAsInt();
         req.triggerType = params.triggerType;
         req.configurationAction = 0x1; // Create or modify policy
         req.cpuPowerCorrection = params.powerCorrectionType;
@@ -966,19 +997,39 @@ class Policy
         failureAction = params.limitException;
         correctionTime = params.correctionInMs;
 
+        return dbusPath;
+    }
+
+    std::string getId() const
+    {
         return id;
     }
 
-    uint8_t getId() const
+    uint8_t getIdAsInt() const
     {
-        return id;
+        if (id == "DmtfPower")
+        {
+            return dmtfPowerPolicyId;
+        }
+        else if (id == "DmtfPowerOem")
+        {
+            return dmtfPowerOemPolicyId;
+        }
+        try
+        {
+            return std::stoi(id);
+        }
+        catch (...)
+        {
+            throw PoliciesCannotBeCreated();
+        }
     }
 
   private:
     std::shared_ptr<sdbusplus::asio::connection> conn;
     std::string dbusPath;
     uint8_t domainId;
-    uint8_t id;
+    std::string id;
     std::shared_ptr<sdbusplus::asio::dbus_interface> attributesIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> statisticsIf;
     uint16_t limit{0};
@@ -1035,7 +1086,7 @@ class Policy
         req.domainId = domainId;
         req.statsSide = 0;
         req.perComponent = 0; // Accumulated data from whole domain
-        req.policyId = id;
+        req.policyId = getIdAsInt();
 
         ipmiSendReceive<nmIpmiGetNmStatisticsReq, nmIpmiGetNmStatisticsResp>(
             conn, ipmiGetNmStatisticsNetFn, ipmiGetNmStatisticsLun,
@@ -1076,13 +1127,13 @@ class Policy
 
         ipmiSetIntelIanaNumber(getPolicyReq.iana);
         getPolicyReq.domainId = domainId;
-        getPolicyReq.policyId = id;
+        getPolicyReq.policyId = getIdAsInt();
         getPolicyIpmi(getPolicyReq, getPolicyResp);
 
         ipmiSetIntelIanaNumber(setPolicyReq.iana);
         setPolicyReq.domainId = getPolicyResp.domainId;
         setPolicyReq.policyEnabled = 0x1; // Enable policy during creation
-        setPolicyReq.policyId = id;
+        setPolicyReq.policyId = getIdAsInt();
         setPolicyReq.triggerType = getPolicyResp.triggerType;
         setPolicyReq.configurationAction = 0x1; // Create or modify policy
         setPolicyReq.cpuPowerCorrection = getPolicyResp.cpuPowerCorrection;
@@ -1288,9 +1339,10 @@ class Domain
             server.add_interface(dbusPath, nmDomainPolicyManagerIf);
         policyManagerIf->register_method(
             "CreateWithId",
-            [this, &server](uint8_t policyId, PolicyParamsTuple t) {
+            [this, &server](std::string policyId, PolicyParamsTuple t) {
                 auto params = makeFromTuple<PolicyParams>(t);
-                return createOrUpdatePolicy(server, policyId, params);
+                return sdbusplus::message::object_path{
+                    createOrUpdatePolicy(server, policyId, params)};
             });
         policyManagerIf->initialize();
     }
@@ -1320,8 +1372,9 @@ class Domain
         return max;
     }
 
-    uint8_t createOrUpdatePolicy(sdbusplus::asio::object_server &server,
-                                 uint8_t policyId, PolicyParams &policyParams)
+    std::string createOrUpdatePolicy(sdbusplus::asio::object_server &server,
+                                     std::string policyId,
+                                     PolicyParams &policyParams)
     {
         for (auto &policy : policies)
         {
@@ -1332,9 +1385,9 @@ class Domain
         }
         auto policyTmp =
             std::make_unique<Policy>(conn, server, dbusPath, id, policyId);
-        uint8_t policyIdTmp = policyTmp->setOrUpdatePolicy(policyParams);
+        std::string policyPath = policyTmp->setOrUpdatePolicy(policyParams);
         policies.emplace_back(std::move(policyTmp));
-        return policyIdTmp;
+        return policyPath;
     }
 
     void getCapabilites(double &minLimit, double &maxLimit)
