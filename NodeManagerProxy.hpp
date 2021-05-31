@@ -50,6 +50,9 @@ constexpr const char *associationInterface =
 // good later to change it for redfish, but I'm not sure to what today
 constexpr const char *meStatusPath = "/xyz/openbmc_project/status/me";
 
+constexpr const sdbusplus::SdBusDuration kIpmbTimeout =
+    sdbusplus::SdBusDuration{1000000};
+
 using Association = std::tuple<std::string, std::string, std::string>;
 
 namespace power
@@ -333,7 +336,7 @@ int ipmbSendRequest(sdbusplus::asio::connection &conn,
         auto mesg =
             conn.new_method_call(ipmbBus, ipmbObj, ipmbIntf, "sendRequest");
         mesg.append(ipmbMeChannelNum, netFn, lun, cmd, dataToSend);
-        auto ret = conn.call(mesg);
+        auto ret = conn.call(mesg, kIpmbTimeout);
         ret.read(ipmbResponse);
         return 0;
     }
