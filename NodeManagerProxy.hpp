@@ -968,6 +968,7 @@ class Policy
     {
         createAttributesInterface(server);
         createStatisticsInterface(server);
+        createEnabledInterface(server);
     }
 
     static constexpr uint8_t dmtfPowerPolicyId = 254;
@@ -979,7 +980,7 @@ class Policy
 
         ipmiSetIntelIanaNumber(req.iana);
         req.domainId = domainId;
-        req.policyEnabled = 0x1; // Enable policy during creation
+        req.policyEnabled = 0x0; // Policy disabled during creation
         req.policyId = getIdAsInt();
         req.triggerType = params.triggerType;
         req.configurationAction = 0x1; // Create or modify policy
@@ -1035,9 +1036,11 @@ class Policy
     std::string id;
     std::shared_ptr<sdbusplus::asio::dbus_interface> attributesIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> statisticsIf;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> enabledIf;
     uint16_t limit{0};
     int failureAction{0};
     uint32_t correctionTime{0};
+    bool enabled{false};
 
     void createAttributesInterface(sdbusplus::asio::object_server &server)
     {
@@ -1065,7 +1068,22 @@ class Policy
                 return 1;
             },
             [this](const auto &) { return correctionTime; });
+
         attributesIf->initialize();
+    }
+
+    void createEnabledInterface(sdbusplus::asio::object_server &server)
+    {
+        enabledIf =
+            server.add_interface(dbusPath, "xyz.openbmc_project.Object.Enable");
+        enabledIf->register_property_rw(
+            "Enabled", bool{false}, sdbusplus::vtable::property_::emits_change,
+            [this](const auto &newPropertyValue, const auto &) {
+                updatePolicyEnablament(newPropertyValue);
+                return 1;
+            },
+            [this](const auto &) { return enabled; });
+        enabledIf->initialize();
     }
 
     void createStatisticsInterface(sdbusplus::asio::object_server &server)
@@ -1135,7 +1153,7 @@ class Policy
 
         ipmiSetIntelIanaNumber(setPolicyReq.iana);
         setPolicyReq.domainId = getPolicyResp.domainId;
-        setPolicyReq.policyEnabled = 0x1; // Enable policy during creation
+        setPolicyReq.policyEnabled = getPolicyResp.policyEnabled;
         setPolicyReq.policyId = getIdAsInt();
         setPolicyReq.triggerType = getPolicyResp.triggerType;
         setPolicyReq.configurationAction = 0x1; // Create or modify policy
@@ -1178,6 +1196,14 @@ class Policy
             setPolicyReq.correctionTime = newCorrectionTime;
         });
         correctionTime = newCorrectionTime;
+    }
+
+    void updatePolicyEnablament(bool newEnabledState)
+    {
+        updatePolicy([newEnabledState](nmIpmiSetNmPolicyReq &setPolicyReq) {
+            setPolicyReq.policyEnabled = newEnabledState;
+        });
+        enabled = newEnabledState;
     }
 
     /**
