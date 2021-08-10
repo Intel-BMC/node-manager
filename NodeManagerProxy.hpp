@@ -947,6 +947,7 @@ void ipmiSendReceive(std::shared_ptr<sdbusplus::asio::connection> conn,
               reinterpret_cast<uint8_t *>(&resp));
 }
 
+using DeleteCallback = std::function<void(const std::string policyId)>;
 /**
  * @brief Node Manager Policy
  */
@@ -961,14 +962,23 @@ class Policy
 
     Policy(std::shared_ptr<sdbusplus::asio::connection> connArg,
            sdbusplus::asio::object_server &server, std::string &domainDbusPath,
-           uint8_t domainIdArg, std::string idArg) :
+           uint8_t domainIdArg, std::string idArg, DeleteCallback deleteArg) :
         conn(connArg),
         dbusPath(domainDbusPath + "/Policy/" + idArg), domainId(domainIdArg),
-        id(idArg)
+        id(idArg), deleteCallback(deleteArg), sdserver(server)
     {
         createAttributesInterface(server);
         createStatisticsInterface(server);
         createEnabledInterface(server);
+        createDeleteInterface(server);
+    }
+
+    ~Policy()
+    {
+        sdserver.remove_interface(attributesIf);
+        sdserver.remove_interface(statisticsIf);
+        sdserver.remove_interface(enabledIf);
+        sdserver.remove_interface(deleteIf);
     }
 
     static constexpr uint8_t dmtfPowerPolicyId = 254;
@@ -1037,10 +1047,13 @@ class Policy
     std::shared_ptr<sdbusplus::asio::dbus_interface> attributesIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> statisticsIf;
     std::shared_ptr<sdbusplus::asio::dbus_interface> enabledIf;
+    std::shared_ptr<sdbusplus::asio::dbus_interface> deleteIf;
     uint16_t limit{0};
     int failureAction{0};
     uint32_t correctionTime{0};
     bool enabled{false};
+    DeleteCallback deleteCallback;
+    sdbusplus::asio::object_server &sdserver;
 
     void createAttributesInterface(sdbusplus::asio::object_server &server)
     {
@@ -1084,6 +1097,23 @@ class Policy
             },
             [this](const auto &) { return enabled; });
         enabledIf->initialize();
+    }
+
+    void createDeleteInterface(sdbusplus::asio::object_server &server)
+    {
+        deleteIf =
+            server.add_interface(dbusPath, "xyz.openbmc_project.Object.Delete");
+        deleteIf->register_method("Delete", [this]() {
+            deletePolicy();
+            conn->get_io_context().post(
+                [id = getId(), deleteFun = deleteCallback]() {
+                    if (deleteFun)
+                    {
+                        deleteFun(id);
+                    }
+                });
+        });
+        deleteIf->initialize();
     }
 
     void createStatisticsInterface(sdbusplus::asio::object_server &server)
@@ -1204,6 +1234,35 @@ class Policy
             setPolicyReq.policyEnabled = newEnabledState;
         });
         enabled = newEnabledState;
+    }
+
+    void deletePolicy()
+    {
+        nmIpmiGetNmPolicyReq getPolicyReq = {0};
+        nmIpmiGetNmPolicyResp getPolicyResp = {0};
+        nmIpmiSetNmPolicyReq setPolicyReq = {0};
+
+        ipmiSetIntelIanaNumber(getPolicyReq.iana);
+        getPolicyReq.domainId = domainId;
+        getPolicyReq.policyId = getIdAsInt();
+        getPolicyIpmi(getPolicyReq, getPolicyResp);
+
+        ipmiSetIntelIanaNumber(setPolicyReq.iana);
+        setPolicyReq.domainId = getPolicyResp.domainId;
+        setPolicyReq.policyEnabled = getPolicyResp.policyEnabled;
+        setPolicyReq.policyId = getIdAsInt();
+        setPolicyReq.triggerType = getPolicyResp.triggerType;
+        setPolicyReq.configurationAction = 0x0; // Delete policy
+        setPolicyReq.cpuPowerCorrection = getPolicyResp.cpuPowerCorrection;
+        setPolicyReq.storageOption = getPolicyResp.storageOption;
+        setPolicyReq.sendAlert = getPolicyResp.sendAlert;
+        setPolicyReq.shutdownSystem = getPolicyResp.shutdownSystem;
+        setPolicyReq.limit = getPolicyResp.limit;
+        setPolicyReq.correctionTime = getPolicyResp.correctionTime;
+        setPolicyReq.triggerLimit = getPolicyResp.triggerLimit;
+        setPolicyReq.statsPeriod = getPolicyResp.statsPeriod;
+
+        setPolicyIpmi(setPolicyReq);
     }
 
     /**
@@ -1412,8 +1471,18 @@ class Domain
                 return policy->setOrUpdatePolicy(policyParams);
             }
         }
-        auto policyTmp =
-            std::make_unique<Policy>(conn, server, dbusPath, id, policyId);
+        auto policyTmp = std::make_unique<Policy>(
+            conn, server, dbusPath, id, policyId,
+            [this](const std::string policyId) {
+                for (auto it = policies.cbegin(); it != policies.cend(); it++)
+                {
+                    if ((*it)->getId() == policyId)
+                    {
+                        policies.erase(it);
+                        break;
+                    }
+                }
+            });
         std::string policyPath = policyTmp->setOrUpdatePolicy(policyParams);
         policies.emplace_back(std::move(policyTmp));
         return policyPath;
