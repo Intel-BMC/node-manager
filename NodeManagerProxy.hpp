@@ -1369,6 +1369,9 @@ constexpr const char *nmDomainCapabilitesIf =
 constexpr const char *nmDomainPolicyManagerIf =
     "xyz.openbmc_project.NodeManager.PolicyManager";
 
+boost::container::flat_map<uint8_t, std::string> domainIdToName = {
+    {5, "DcTotalPower"}};
+
 /**
  * @brief Node Manager Domain
  */
@@ -1385,7 +1388,7 @@ class Domain
            sdbusplus::asio::object_server &server, uint8_t idArg) :
         id(idArg),
         dbusPath("/xyz/openbmc_project/NodeManager/Domain/" +
-                 std::to_string(idArg)),
+                 domainIdToName[idArg]),
         conn(connArg)
     {
         // SPS NM does not support DC Total so need to remap to AC Total (entire
