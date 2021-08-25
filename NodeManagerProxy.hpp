@@ -1370,7 +1370,7 @@ constexpr const char *nmDomainPolicyManagerIf =
     "xyz.openbmc_project.NodeManager.PolicyManager";
 
 boost::container::flat_map<uint8_t, std::string> domainIdToName = {
-    {5, "DcTotalPower"}};
+    {5, "DCTotalPlatformPower"}};
 
 /**
  * @brief Node Manager Domain
