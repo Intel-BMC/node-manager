@@ -861,7 +861,7 @@ struct PolicyParams
     std::vector<std::map<std::string, uint32_t>> thresholds;
     uint8_t componentId;
     uint16_t triggerLimit;
-    uint8_t triggerType;
+    std::string triggerType;
 };
 
 /**
@@ -984,6 +984,26 @@ class Policy
     static constexpr uint8_t dmtfPowerPolicyId = 254;
     static constexpr uint8_t dmtfPowerOemPolicyId = 255;
 
+    boost::container::flat_map<uint8_t, std::string> triggerIdToName = {
+        {0, "AlwaysOn"},
+        {1, "InletTemperature"},
+        {2, "MissingReadingsTimeout"},
+        {3, "TimeAfterHostReset"},
+        {6, "GPIO"}};
+
+    uint8_t triggerIdFromName(const std::string &nameToBeFound)
+    {
+        for (const auto &[id, name] : triggerIdToName)
+        {
+            if (name == nameToBeFound)
+            {
+                return id;
+            }
+        }
+
+        return 255;
+    }
+
     std::string setOrUpdatePolicy(PolicyParams &params)
     {
         nmIpmiSetNmPolicyReq req = {0};
@@ -992,7 +1012,7 @@ class Policy
         req.domainId = domainId;
         req.policyEnabled = 0x0; // Policy disabled during creation
         req.policyId = getIdAsInt();
-        req.triggerType = params.triggerType;
+        req.triggerType = triggerIdFromName(params.triggerType);
         req.configurationAction = 0x1; // Create or modify policy
         req.cpuPowerCorrection = params.powerCorrectionType;
         req.storageOption = params.policyStorage;
@@ -1315,7 +1335,7 @@ using PolicyParamsTuple = std::tuple<
     std::vector<std::map<std::string, uint32_t>>,          // 7 - thresholds
     uint8_t,                                               // 8 - componentId
     uint16_t,                                              // 9- triggerLimit
-    uint8_t                                                // 10- triggerType
+    std::string                                            // 10- triggerType
     >;
 
 /**
