@@ -858,7 +858,7 @@ struct PolicyParams
     std::vector<std::map<std::string,
                          std::variant<std::vector<std::string>, std::string>>>
         suspendPeriods;
-    std::vector<std::map<std::string, uint32_t>> thresholds;
+    std::map<std::string, std::vector<uint16_t>> thresholds;
     uint8_t componentId;
     uint16_t triggerLimit;
     std::string triggerType;
@@ -1332,7 +1332,7 @@ using PolicyParamsTuple = std::tuple<
     std::vector<
         std::map<std::string, std::variant<std::vector<std::string>,
                                            std::string>>>, // 6 - suspendPeriods
-    std::vector<std::map<std::string, uint32_t>>,          // 7 - thresholds
+    std::map<std::string, std::vector<uint16_t>>,          // 7 - thresholds
     uint8_t,                                               // 8 - componentId
     uint16_t,                                              // 9- triggerLimit
     std::string                                            // 10- triggerType
