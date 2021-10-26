@@ -340,7 +340,7 @@ int ipmbSendRequest(sdbusplus::asio::connection &conn,
         ret.read(ipmbResponse);
         return 0;
     }
-    catch (sdbusplus::exception::SdBusError &e)
+    catch (sdbusplus::exception::exception &e)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmbSendRequest:, dbus call exception");
@@ -753,15 +753,19 @@ struct InternalFailure final : public sdbusplus::exception_t
     const char *name() const noexcept override
     {
         return errName;
-    };
+    }
     const char *description() const noexcept override
     {
         return errDesc;
-    };
+    }
     const char *what() const noexcept override
     {
         return errWhat;
-    };
+    }
+    int get_errno() const noexcept override
+    {
+        return EACCES;
+    }
 };
 
 /**
@@ -780,15 +784,19 @@ struct NonSuccessCompletionCode final : public sdbusplus::exception_t
     const char *name() const noexcept override
     {
         return errName;
-    };
+    }
     const char *description() const noexcept override
     {
         return errDesc;
-    };
+    }
     const char *what() const noexcept override
     {
         return errWhat;
-    };
+    }
+    int get_errno() const noexcept override
+    {
+        return EIO;
+    }
 };
 
 /**
@@ -806,15 +814,19 @@ struct WrongResponseSize final : public sdbusplus::exception_t
     const char *name() const noexcept override
     {
         return errName;
-    };
+    }
     const char *description() const noexcept override
     {
         return errDesc;
-    };
+    }
     const char *what() const noexcept override
     {
         return errWhat;
-    };
+    }
+    int get_errno() const noexcept override
+    {
+        return EIO;
+    }
 };
 
 struct PoliciesCannotBeCreated final : public sdbusplus::exception_t
@@ -833,15 +845,19 @@ struct PoliciesCannotBeCreated final : public sdbusplus::exception_t
     const char *name() const noexcept override
     {
         return errName;
-    };
+    }
     const char *description() const noexcept override
     {
         return errDesc;
-    };
+    }
     const char *what() const noexcept override
     {
         return errWhat;
-    };
+    }
+    int get_errno() const noexcept override
+    {
+        return EINVAL;
+    }
 };
 
 /**
