@@ -777,6 +777,11 @@ struct NonSuccessCompletionCode final : public sdbusplus::exception_t
         "xyz.openbmc_project.Common.Error.NonSuccessCompletionCode: The "
         "operation failed. Got non-success completion code.";
 
+    NonSuccessCompletionCode(uint8_t cc, const std::vector<uint8_t> &resp) :
+        cc{cc}, resp{resp}
+    {
+    }
+
     const char *name() const noexcept override
     {
         return errName;
@@ -789,6 +794,19 @@ struct NonSuccessCompletionCode final : public sdbusplus::exception_t
     {
         return errWhat;
     };
+
+    uint8_t getCc(void) const
+    {
+        return cc;
+    }
+    const std::vector<uint8_t> &getResp(void) const
+    {
+        return resp;
+    }
+
+  private:
+    uint8_t cc;
+    std::vector<uint8_t> resp;
 };
 
 /**
@@ -933,7 +951,7 @@ void ipmiSendReceive(std::shared_ptr<sdbusplus::asio::connection> conn,
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "error while sending IPMB request, wrong cc: ",
             phosphor::logging::entry("%d", cc));
-        throw NonSuccessCompletionCode();
+        throw NonSuccessCompletionCode(cc, dataReceived);
     }
 
     if (dataReceived.size() != sizeof(resp))
