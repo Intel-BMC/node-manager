@@ -1002,12 +1002,12 @@ class Policy
     static constexpr uint8_t dmtfPowerPolicyId = 254;
     static constexpr uint8_t dmtfPowerOemPolicyId = 255;
 
-    boost::container::flat_map<uint8_t, std::string> triggerIdToName = {
-        {0, "AlwaysOn"},
-        {1, "InletTemperature"},
-        {2, "MissingReadingsTimeout"},
-        {3, "TimeAfterHostReset"},
-        {6, "GPIO"}};
+    static const inline boost::container::flat_map<uint8_t, std::string>
+        triggerIdToName = {{0, "AlwaysOn"},
+                           {1, "InletTemperature"},
+                           {2, "MissingReadingsTimeout"},
+                           {3, "TimeAfterHostReset"},
+                           {6, "GPIO"}};
 
     uint8_t triggerIdFromName(const std::string &nameToBeFound)
     {
@@ -1022,13 +1022,14 @@ class Policy
         return 255;
     }
 
-    std::string setOrUpdatePolicy(PolicyParams &params)
+    std::string setOrUpdatePolicy(const PolicyParams &params,
+                                  bool enableArg = false)
     {
         nmIpmiSetNmPolicyReq req = {0};
 
         ipmiSetIntelIanaNumber(req.iana);
         req.domainId = domainId;
-        req.policyEnabled = 0x0; // Policy disabled during creation
+        req.policyEnabled = enableArg;
         req.policyId = getIdAsInt();
         req.triggerType = triggerIdFromName(params.triggerType);
         req.configurationAction = 0x1; // Create or modify policy
@@ -1048,6 +1049,7 @@ class Policy
         limit = params.limit;
         failureAction = params.limitException;
         correctionTime = params.correctionInMs;
+        enabled = enableArg;
 
         return dbusPath;
     }
@@ -1438,7 +1440,116 @@ class Domain
         createCapabilitesInterface(server);
         createPolicyManagerInterface(server);
         createStatisticsInterface(server);
+        for (auto &&p : storedPolicies{*this})
+        {
+            if (std::get<0>(p) != Policy::dmtfPowerOemPolicyId)
+                createOrUpdatePolicy(server, std::to_string(std::get<0>(p)),
+                                     std::get<1>(p), std::get<2>(p));
+        }
     }
+
+    class storedPolicies
+    {
+        const Domain &domain;
+
+      public:
+        storedPolicies(const Domain &domain) : domain{domain}
+        {
+        }
+
+        class iterator
+            : public std::iterator<std::input_iterator_tag,
+                                   std::tuple<int, const PolicyParams &, bool>>
+        {
+            const Domain &domain;
+
+            uint8_t policyIdInt;
+            PolicyParams params;
+            bool enabled;
+
+            void fetchPolicyParams(void)
+            {
+                nmIpmiGetNmPolicyReq req = {0};
+                ipmiSetIntelIanaNumber(req.iana);
+                req.domainId = domain.id;
+                nmIpmiGetNmPolicyResp resp = {0};
+
+                while (policyIdInt != 0)
+                {
+                    req.policyId = policyIdInt;
+                    try
+                    {
+                        ipmiSendReceive<nmIpmiGetNmPolicyReq,
+                                        nmIpmiGetNmPolicyResp>(
+                            domain.conn, ipmiGetNmPolicyNetFn,
+                            ipmiGetNmPolicyLun, ipmiGetNmPolicyCmd, req, resp);
+
+                        enabled = resp.policyEnabled;
+                        params.triggerType =
+                            Policy::triggerIdToName.at(resp.triggerType);
+                        params.powerCorrectionType = resp.cpuPowerCorrection;
+                        params.policyStorage = resp.storageOption;
+                        params.limit = resp.limit;
+                        params.correctionInMs = resp.correctionTime;
+                        params.triggerLimit = resp.triggerLimit;
+                        params.statReportingPeriod = resp.statsPeriod;
+                        params.limitException =
+                            (resp.sendAlert << 1) | resp.shutdownSystem;
+                        break;
+                    }
+                    catch (NonSuccessCompletionCode &e)
+                    {
+                        if (e.getCc() == 0x80)
+                        {
+                            // next valid policy ID
+                            policyIdInt = e.getResp()[3];
+                        }
+                        else
+                            throw(e);
+                    }
+                }
+            }
+
+          public:
+            explicit iterator(uint8_t id, const Domain &domain) :
+                policyIdInt{id}, domain{domain}
+            {
+                fetchPolicyParams();
+            }
+            iterator &operator++()
+            {
+                policyIdInt++;
+                fetchPolicyParams();
+                return *this;
+            }
+            iterator operator++(int)
+            {
+                iterator retval = *this;
+                ++(*this);
+                return retval;
+            }
+            bool operator==(iterator other) const
+            {
+                return policyIdInt == other.policyIdInt;
+            }
+            bool operator!=(iterator other) const
+            {
+                return !(*this == other);
+            }
+            value_type operator*() const
+            {
+                return {policyIdInt, params, enabled};
+            }
+        };
+        iterator begin() const
+        {
+            return iterator{1, domain};
+        }
+        iterator end() const
+        {
+            return iterator{0, domain};
+        }
+    };
 
   private:
     uint8_t id;
@@ -1503,13 +1614,14 @@ class Domain
 
     std::string createOrUpdatePolicy(sdbusplus::asio::object_server &server,
                                      std::string policyId,
-                                     PolicyParams &policyParams)
+                                     const PolicyParams &policyParams,
+                                     bool enable = false)
     {
         for (auto &policy : policies)
         {
             if (policy->getId() == policyId)
             {
-                return policy->setOrUpdatePolicy(policyParams);
+                return policy->setOrUpdatePolicy(policyParams, enable);
             }
         }
         auto policyTmp = std::make_unique<Policy>(
@@ -1524,7 +1636,8 @@ class Domain
                     }
                 }
             });
-        std::string policyPath = policyTmp->setOrUpdatePolicy(policyParams);
+        std::string policyPath =
+            policyTmp->setOrUpdatePolicy(policyParams, enable);
         policies.emplace_back(std::move(policyTmp));
         return policyPath;
     }
