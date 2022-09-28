@@ -13,6 +13,7 @@
  *  limitations under the License.
  */
 
+#include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/asio/object_server.hpp>
