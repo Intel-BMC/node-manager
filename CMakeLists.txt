@@ -40,4 +40,4 @@ link_directories (${EXTERNAL_INSTALL_LOCATION}/lib)
 set (SERVICE_FILES ${PROJECT_SOURCE_DIR}/node-manager-proxy.service)
 
 install (TARGETS ${PROJECT_NAME} DESTINATION sbin)
-install (FILES ${SERVICE_FILES} DESTINATION /lib/systemd/system/)
+install (FILES ${SERVICE_FILES} DESTINATION /usr/lib/systemd/system/)
