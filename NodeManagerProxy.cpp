@@ -183,6 +183,8 @@ void createAssociations()
  */
 int main(int argc, char *argv[])
 {
+    server.add_manager("/xyz/openbmc_project/sensors");
+
     conn->request_name(nmdBus);
     createSensors();
     createAssociations();
